@@ -1,4 +1,55 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>piso9studio</title>
-<h1>Hello World</h1>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>piso9studio</title>
+</head>
+<body>
+  <h1>piso9 studio</h1>
+  <p>Sumate a la waitlist.</p>
+
+  <!-- El form postea a Google Forms sin que la pagina navegue (target = iframe oculto) -->
+  <form
+    id="waitlist"
+    action="https://docs.google.com/forms/d/e/1FAIpQLSd9MwmpAdyciprolaAfxcp3IeBwsOeStMZjvpCfY-JVp68wJw/formResponse"
+    method="POST"
+    target="hidden_iframe">
+
+    <p>
+      <label>
+        Email<br>
+        <input type="email" name="entry.1773452000" required>
+      </label>
+    </p>
+
+    <p>
+      <label>
+        Mensaje (opcional)<br>
+        <textarea name="entry.5255270" rows="3"></textarea>
+      </label>
+    </p>
+
+    <button type="submit">Enviar</button>
+  </form>
+
+  <p id="gracias" hidden>¡Gracias! Te anotamos. ✅</p>
+
+  <!-- Recibe la respuesta de Google Forms para que la pagina no se redirija -->
+  <iframe name="hidden_iframe" style="display:none"></iframe>
+
+  <script>
+    const form = document.getElementById("waitlist");
+    const gracias = document.getElementById("gracias");
+
+    form.addEventListener("submit", () => {
+      // El POST se manda igual; al volver el iframe oculto, mostramos el "gracias".
+      // Pequeno delay para que el envio salga antes de limpiar/ocultar el form.
+      setTimeout(() => {
+        form.hidden = true;
+        gracias.hidden = false;
+      }, 300);
+    });
+  </script>
+</body>
+</html>
