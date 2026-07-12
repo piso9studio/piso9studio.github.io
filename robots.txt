@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://piso9.studio/sitemap.xml
