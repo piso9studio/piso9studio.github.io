@@ -44,9 +44,11 @@ Las 4 fuentes críticas van con `<link rel="preload" as="font" crossorigin>` en 
 
 `<piso9-hero>` ES la página: modo TV-only (clase `p9-tv` en `<html>`, seteada por un script inline en el `<head>`; las secciones DOM de abajo quedan sr-only como fallback SEO/no-JS). Todo se dibuja en dos texturas canvas 2D subidas a WebGL; los controles reales (buttons/links invisibles) se posicionan encima con el mapeo inverso del barrel distortion (`_screenPos`, `k=0.22` debe seguir igual al `0.10*2.2` del shader).
 
-**Canales**: CH 9 home (wordmark + CTA + caption), CH 1..N proyectos (datos en el JSON inline `#p9-channels` de `index.html`), CH 0 contacto (mailto OSD). Se navega con las cajitas ▲/▼ abajo a la derecha (paths — el subset latin de VT323 no tiene ▲▼↗; en home llevan hint "SCROLL"), rueda del mouse, swipe vertical táctil, teclado (ArrowUp/Down), o los links/CTAs del nav. El cambio de canal reproduce un burst de static (~400ms, uniform `uSwitch`, envolvente en CPU en `_frame`); el contenido se intercambia en el pico del ruido. Deep-links: `#ch0`/`#ch1`/`#ch9` (+ alias `#work`, `#contact`).
+**Canales**: CH 9 home (wordmark + tagline/copy + CTAs), CH 1 hub de proyectos (mini galería con cards clickeables), CH 2..N+1 un canal por proyecto, CH 0 contacto (botón mailto). Se navega con las cajitas ▲/▼ + botón MENU abajo a la derecha (paths — el subset latin de VT323 no tiene ▲▼↗; en home llevan hint "SCROLL / ARROW KEYS"), rueda del mouse, swipe vertical táctil, teclado (ArrowUp/Down), o los links/CTAs del nav (oculto en home; logo PISO9 Orbitron en los demás). El cambio de canal reproduce un burst de static (~400ms, uniform `uSwitch`); el contenido se intercambia en el pico del ruido. Deep-links: `#ch0`/`#ch2`/`#ch9` (+ alias `#work` → hub, `#contact`).
 
-Atributos: `accent`, `strength`, `grain`, `crt`, `caption-left` (tagline), `caption-copy` (copy largo bajo el tagline, solo canal home). `prefers-reduced-motion` salta el boot y hace los cambios de canal instantáneos. Sin WebGL, `_fallback()` quita `p9-tv` y restaura la página scrolleable. No tocar sin probar en desktop y mobile (el CRT se apaga bajo 720px; ahí el layout de proyecto se apila vertical).
+**i18n**: todo el wording vive en dos JSON inline en `index.html` (`#p9-i18n-en` y `#p9-i18n-es`, cada uno con `ui` + `projects`). Default = idioma del navegador (es→ES, resto EN); la última selección persiste en `localStorage['p9-lang']` y se cambia desde el menú OSD (botón MENU → AJUSTES/SETTINGS → EN/ES). La capa UI del shader se compone con alpha (no aditiva) para que el panel del menú pueda tapar contenido.
+
+Atributos: `accent`, `strength`, `grain`, `crt`. `prefers-reduced-motion` salta el boot y hace los cambios de canal instantáneos. Sin WebGL, `_fallback()` quita `p9-tv` y restaura la página scrolleable (fallback solo en inglés). No tocar sin probar en desktop y mobile (el CRT se apaga bajo 720px; ahí proyecto y hub se apilan vertical).
 
 ## Reglas de performance
 
@@ -58,7 +60,7 @@ Atributos: `accent`, `strength`, `grain`, `crt`, `caption-left` (tagline), `capt
 
 ## Convenciones
 
-- Para agregar un proyecto (3 pasos): (1) entrada en el JSON `#p9-channels` de `index.html` con `ch` siguiente, `title` en mayúsculas, `url`, `year`, `desc`, `meta` y el webp con sus `imgW`/`imgH` reales; (2) el `<article class="project">` fallback en `#work` (head con título Orbitron + año, descripción, `browser-card` con screenshot webp o facade `data-embed`, y `project-meta` en mayúsculas); (3) el screenshot webp en `assets/`. Mantener ambos en sync.
+- Para agregar un proyecto (3 pasos): (1) entrada en **ambos** JSON `#p9-i18n-en` y `#p9-i18n-es` de `index.html` con `ch` siguiente, `title` en mayúsculas, `url`, `year`, `desc`, `meta` (traducidos por idioma) y el webp con sus `imgW`/`imgH` reales; (2) el `<article class="project">` fallback en `#work` (head con título Orbitron + año, descripción, `browser-card` con screenshot webp o facade `data-embed`, y `project-meta` en mayúsculas); (3) el screenshot webp en `assets/`. Mantener los tres en sync.
 - Los estilos van en `css/main.css` con clases — **no usar estilos inline**.
 - Metadata (title, description, OG) vive solo en `index.html`; si cambia el copy del hero/intro, actualizarla también.
 - `sitemap.xml`: actualizar `<lastmod>` en cambios de contenido relevantes.

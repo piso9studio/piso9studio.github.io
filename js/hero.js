@@ -1,8 +1,10 @@
 /* <piso9-hero> — fullscreen WebGL TV: the whole page lives inside the tube.
-   Channels: CH 9 home (wordmark), CH 1..N projects (from #p9-channels JSON),
-   CH 0 contact. Switching channels replays the boot static burst (uSwitch).
-   Attributes: accent (hex), strength (float), grain ("on"|"off"), crt,
-   caption-left (tagline), caption-copy (longer copy under the tagline). */
+   Channels: CH 9 home, CH 1 work hub (mini gallery), CH 2..N+1 projects,
+   CH 0 contact. Wording comes from the #p9-i18n-en / #p9-i18n-es JSON blocks
+   in index.html; language defaults to the browser's, persists in localStorage
+   ('p9-lang') and can be switched from the OSD settings menu (MENU button).
+   Switching channels replays the boot static burst (uniform uSwitch).
+   Attributes: accent (hex), strength (float), grain ("on"|"off"), crt. */
 (function () {
   if (customElements.get('piso9-hero')) return;
 
@@ -66,8 +68,10 @@ void main(){
   col.g = texture2D(uTex, uv - disp).g;
   col.b = texture2D(uTex, uv - disp + ca).b;
 
-  // UI layer: takes the tube shape but not the mouse distortion
-  col += texture2D(uTexUI, uv).rgb;
+  // UI layer: takes the tube shape but not the mouse distortion.
+  // Alpha-composited (not additive) so opaque OSD panels can cover content.
+  vec4 uiC = texture2D(uTexUI, uv);
+  col = mix(col, uiC.rgb, uiC.a);
   vec2 m = uv - uMouse; m.x *= aspect;
   col += uAccent * exp(-dot(m,m)*7.0) * 0.045;
   col += uAccent * energy * 0.035;
@@ -111,7 +115,7 @@ void main(){
   };
 
   class Piso9Hero extends HTMLElement {
-    static get observedAttributes() { return ['accent', 'strength', 'grain', 'crt', 'caption-left', 'caption-copy', 'captionleft', 'captioncopy']; }
+    static get observedAttributes() { return ['accent', 'strength', 'grain', 'crt']; }
 
     connectedCallback() {
       if (this._booted) return;
@@ -121,22 +125,31 @@ void main(){
       this.style.height = '100%';
       this.style.position = this.style.position || 'relative';
       this.style.overflow = 'hidden';
+      this.style.touchAction = 'pinch-zoom';
 
       this._canvas = document.createElement('canvas');
       this._canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block';
       this.appendChild(this._canvas);
 
-      // channels: CH 9 home, CH 1..N projects (from inline JSON), CH 0 contact
-      let projects = [];
-      try {
-        const data = document.getElementById('p9-channels');
-        if (data) projects = JSON.parse(data.textContent).projects || [];
-      } catch (e) { }
-      this._channels = [
-        { id: 9, type: 'home' },
-        ...projects.map(p => ({ id: p.ch, type: 'project', data: p })),
-        { id: 0, type: 'contact' }
-      ];
+      // i18n dictionaries (ui strings + projects) from inline JSON blocks
+      this._dicts = {};
+      ['en', 'es'].forEach(l => {
+        try {
+          const el = document.getElementById('p9-i18n-' + l);
+          if (el) this._dicts[l] = JSON.parse(el.textContent);
+        } catch (e) { }
+      });
+      let lang = null;
+      try { lang = localStorage.getItem('p9-lang'); } catch (e) { }
+      if (!this._dicts[lang]) {
+        lang = (navigator.language || '').toLowerCase().indexOf('es') === 0 && this._dicts.es ? 'es' : 'en';
+      }
+      this._lang = this._dicts[lang] ? lang : Object.keys(this._dicts)[0] || 'en';
+      document.documentElement.lang = this._lang;
+
+      this._imgs = Object.create(null); // screenshot cache, keyed by src
+      this._menuOpen = false;
+      this._buildChannels();
       this._chIndex = this._initialIndex();
       this._switchT0 = -1;
       this._pendingIdx = -1;
@@ -147,7 +160,7 @@ void main(){
       const mkOverlay = (tag, label, href) => {
         const el = document.createElement(tag);
         if (href) el.href = href;
-        el.setAttribute('aria-label', label);
+        if (label) el.setAttribute('aria-label', label);
         el.style.cssText = 'position:absolute;display:block;cursor:pointer;z-index:5;margin:0;padding:0;background:none;border:0';
         this.appendChild(el);
         return el;
@@ -160,18 +173,39 @@ void main(){
         cta2: mkOverlay('button', 'contact us — channel 0'),
         prev: mkOverlay('button', 'channel down'),
         next: mkOverlay('button', 'channel up'),
+        menu: mkOverlay('button', 'settings menu'),
+        langEn: mkOverlay('button', 'switch to English'),
+        langEs: mkOverlay('button', 'cambiar a español'),
         visit: mkOverlay('a', 'visit project site'),
-        mailto: mkOverlay('a', 'email hola@piso9.studio', 'mailto:hola@piso9.studio')
+        mailto: mkOverlay('a', 'email hola@piso9.studio', 'mailto:hola@piso9.studio'),
+        panel: mkOverlay('div', '') // absorbs clicks inside the open OSD panel
       };
+      this._overlays.panel.style.cursor = 'default';
+      this._overlays.panel.style.zIndex = '4'; // below the EN/ES buttons it contains
+      const projCount = ((this._dicts[this._lang] || {}).projects || []).length;
+      for (let i = 0; i < projCount; i++) {
+        const el = this._overlays['proj' + i] = mkOverlay('button', 'project — channel ' + (i + 2));
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.switchChannel(this._channels.findIndex(c => c.type === 'project' && c.pi === i));
+        });
+      }
       this._overlays.visit.target = '_blank';
       this._overlays.visit.rel = 'noopener';
       const wire = (key, target) => this._overlays[key].addEventListener('click', (e) => {
         e.preventDefault();
         this.switchChannel(typeof target === 'string' ? this._indexOf(target) : this._chIndex + target);
       });
-      wire('home', 'home'); wire('work', 'project'); wire('cta', 'project');
+      wire('home', 'home'); wire('work', 'work'); wire('cta', 'work');
       wire('contact', 'contact'); wire('cta2', 'contact');
       wire('prev', -1); wire('next', +1);
+      this._overlays.menu.addEventListener('click', (e) => {
+        e.preventDefault();
+        this._menuOpen = !this._menuOpen;
+        this._drawChannel();
+      });
+      this._overlays.langEn.addEventListener('click', (e) => { e.preventDefault(); this._setLang('en'); });
+      this._overlays.langEs.addEventListener('click', (e) => { e.preventDefault(); this._setLang('es'); });
 
       // screen-reader announcement of the active channel
       this._live = document.createElement('div');
@@ -259,8 +293,19 @@ void main(){
         if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
         if (e.key === 'ArrowUp') { e.preventDefault(); this.switchChannel(this._chIndex + 1); }
         else if (e.key === 'ArrowDown') { e.preventDefault(); this.switchChannel(this._chIndex - 1); }
+        else if (e.key === 'Escape' && this._menuOpen) { this._menuOpen = false; this._drawChannel(); }
       };
       window.addEventListener('keydown', this._onKey);
+
+      // click outside the OSD panel closes it
+      this._onDocDown = (e) => {
+        if (!this._menuOpen) return;
+        const o = this._overlays;
+        if (e.target === o.menu || e.target === o.langEn || e.target === o.langEs || e.target === o.panel) return;
+        this._menuOpen = false;
+        this._drawChannel();
+      };
+      document.addEventListener('pointerdown', this._onDocDown);
 
       // wheel + vertical touch swipe also change channels (with a cooldown so
       // trackpad inertia doesn't skip several channels per flick)
@@ -284,7 +329,6 @@ void main(){
       };
       this.addEventListener('pointerdown', this._onPDown);
       this.addEventListener('pointerup', this._onPUp);
-      this.style.touchAction = 'pinch-zoom';
 
       this._ro = new ResizeObserver(() => this._resize());
       this._ro.observe(this);
@@ -315,6 +359,7 @@ void main(){
       if (this._ro) this._ro.disconnect();
       window.removeEventListener('pointermove', this._onMove);
       window.removeEventListener('keydown', this._onKey);
+      document.removeEventListener('pointerdown', this._onDocDown);
       this.removeEventListener('wheel', this._onWheel);
       this.removeEventListener('pointerdown', this._onPDown);
       this.removeEventListener('pointerup', this._onPUp);
@@ -334,7 +379,29 @@ void main(){
       return this.getAttribute('crt') === 'off' ? 0 : 1;
     }
 
-    // --- channels ---------------------------------------------------------
+    // --- i18n / channels ----------------------------------------------------
+
+    _dict() { return this._dicts[this._lang] || { ui: {}, projects: [] }; }
+
+    _buildChannels() {
+      const projects = this._dict().projects || [];
+      this._channels = [
+        { id: 9, type: 'home' },
+        ...(projects.length ? [{ id: 1, type: 'work' }] : []),
+        ...projects.map((p, i) => ({ id: p.ch, type: 'project', data: p, pi: i })),
+        { id: 0, type: 'contact' }
+      ];
+      if (this._chIndex >= this._channels.length) this._chIndex = 0;
+    }
+
+    _setLang(l) {
+      if (!this._dicts[l] || l === this._lang) return;
+      this._lang = l;
+      try { localStorage.setItem('p9-lang', l); } catch (e) { }
+      document.documentElement.lang = l;
+      this._buildChannels();
+      this._drawChannel();
+    }
 
     _initialIndex() {
       const h = (location.hash || '').toLowerCase();
@@ -343,7 +410,7 @@ void main(){
         const i = this._channels.findIndex(c => c.id === +m[1]);
         if (i >= 0) return i;
       }
-      if (h === '#work') return Math.max(this._indexOf('project'), 0);
+      if (h === '#work') return Math.max(this._indexOf('work'), 0);
       if (h === '#contact') return Math.max(this._indexOf('contact'), 0);
       return 0;
     }
@@ -357,12 +424,14 @@ void main(){
       idx = ((idx % n) + n) % n;
       if (idx === this._chIndex && this._swapped) return;
       if (this._switchT0 >= 0 && performance.now() - this._switchT0 < SWITCH_S * 1000 + 50) return;
-      // prefetch the target's screenshot and its neighbors'
+      // prefetch the target's screenshots and its neighbors'
       [idx, idx - 1, idx + 1].forEach(i => {
         const c = this._channels[((i % n) + n) % n];
         if (c.type === 'project') this._loadImage(c.data);
+        else if (c.type === 'work') (this._dict().projects || []).forEach(p => this._loadImage(p));
       });
       this._lastNav = performance.now();
+      this._menuOpen = false;
       if (this._reduced) {
         this._chIndex = idx;
         this._drawChannel();
@@ -376,21 +445,25 @@ void main(){
 
     _afterSwap() {
       const ch = this._channels[this._chIndex];
-      const p = ch.data;
-      this._live.textContent = 'CH ' + ch.id + (p ? ' — ' + p.title : ch.type === 'contact' ? ' — CONTACT' : ' — PISO9 STUDIO');
+      const label = ch.data ? ch.data.title
+        : ch.type === 'contact' ? 'CONTACT'
+        : ch.type === 'work' ? 'WORK'
+        : 'PISO9 STUDIO';
+      this._live.textContent = 'CH ' + ch.id + ' — ' + label;
       if (history.replaceState) history.replaceState(null, '', '#ch' + ch.id);
     }
 
     _loadImage(p) {
-      if (p._img || p._loading) return;
-      p._loading = true;
+      const src = p && p.img;
+      if (!src || this._imgs[src]) return;
       const img = new Image();
+      this._imgs[src] = img; // also serves as the in-flight marker
       img.decoding = 'async';
-      img.src = p.img;
+      img.src = src;
       const done = () => {
-        p._img = img;
+        img._ok = true;
         const ch = this._channels[this._chIndex];
-        if (ch && ch.data === p && this._gl) this._drawChannel();
+        if (this._gl && (ch.type === 'work' || (ch.data && ch.data.img === src))) this._drawChannel();
       };
       if (img.decode) img.decode().then(done).catch(() => {
         if (img.complete && img.naturalWidth) done();
@@ -437,17 +510,41 @@ void main(){
       return [bx + (bw - iw * s) / 2, by + (bh - ih * s) / 2, iw * s, ih * s];
     }
 
-    // boxed ▲/▼ channel controls, bottom-right; returns their hit rects
-    _drawArrowBoxes(x, w, h, dpr, hint) {
+    // thumbnail boxes for the work hub gallery
+    _hubCards(n, w, h, dpr, narrow) {
+      if (narrow) {
+        const cw = w - 72 * dpr;
+        const chh = Math.min(cw * 0.5, h * 0.2);
+        return Array.from({ length: n }, (_, i) => [36 * dpr, h * 0.28 + i * (chh + 84 * dpr), cw, chh]);
+      }
+      const cw = Math.min(w * 0.27, 430 * dpr), chh = cw * 0.625, gap = 56 * dpr;
+      const x0 = (w - n * cw - (n - 1) * gap) / 2;
+      return Array.from({ length: n }, (_, i) => [x0 + i * (cw + gap), h * 0.4, cw, chh]);
+    }
+
+    // boxed ▲/▼ + MENU controls, bottom-right; returns their hit rects
+    _drawControls(x, w, h, dpr, ui, hint) {
       const bs = 26 * dpr, gap = 8 * dpr, pad = 36 * dpr;
       const bx = w - pad - bs;
-      const dnY = h - pad - bs;
+      const line = Math.max(1, Math.round(dpr));
+      // MENU pill at the very bottom, arrows stacked above it
+      setF(x, '400 ' + (13 * dpr) + 'px ' + MONO, 0.08 * 13 * dpr);
+      const mTxt = ui.menu || 'MENU';
+      const mTw = x.measureText(mTxt).width;
+      const mW = mTw + 16 * dpr;
+      const mX = w - pad - mW, mY = h - pad - bs;
+      const dnY = mY - 14 * dpr - bs;
       const upY = dnY - gap - bs;
       x.strokeStyle = '#262626';
-      x.lineWidth = Math.max(1, Math.round(dpr));
+      x.lineWidth = line;
+      x.strokeRect(mX + 0.5, mY + 0.5, mW - 1, bs - 1);
       x.strokeRect(bx + 0.5, upY + 0.5, bs - 1, bs - 1);
       x.strokeRect(bx + 0.5, dnY + 0.5, bs - 1, bs - 1);
       x.fillStyle = '#a3a3a3';
+      const prevBase = x.textBaseline;
+      x.textBaseline = 'middle';
+      x.fillText(mTxt, mX + 8 * dpr, mY + bs / 2);
+      x.textBaseline = prevBase;
       const tw = 10 * dpr, th = 6 * dpr, cx = bx + bs / 2;
       let cy = upY + bs / 2;
       x.beginPath();
@@ -458,15 +555,14 @@ void main(){
       x.moveTo(cx - tw / 2, cy - th / 2); x.lineTo(cx + tw / 2, cy - th / 2); x.lineTo(cx, cy + th / 2);
       x.closePath(); x.fill();
       if (hint) {
-        const prevBase = x.textBaseline;
         x.textBaseline = 'alphabetic';
         setF(x, '500 ' + (10 * dpr) + 'px ' + STACK, 0.16 * 10 * dpr);
         x.fillStyle = '#808080';
-        const t = 'SCROLL';
-        x.fillText(t, bx + bs - x.measureText(t).width, upY - 12 * dpr);
+        const t = ui.hint || 'SCROLL / ARROW KEYS';
+        x.fillText(t, w - pad - x.measureText(t).width, upY - 12 * dpr);
         x.textBaseline = prevBase;
       }
-      return { next: [bx, upY, bs, bs], prev: [bx, dnY, bs, bs] };
+      return { next: [bx, upY, bs, bs], prev: [bx, dnY, bs, bs], menu: [mX, mY, mW, bs] };
     }
 
     _drawChannel() {
@@ -487,8 +583,10 @@ void main(){
       const x = c.getContext('2d');
       x.fillStyle = '#000';
       x.fillRect(0, 0, w, h);
+      const ui = this._dict().ui || {};
       const dpr = w / Math.max(this.clientWidth, 1);
       const narrow = this.clientWidth < 720;
+      const line = Math.max(1, Math.round(dpr));
 
       if (ch.type === 'home') {
         const T = 'PISO9';
@@ -506,23 +604,44 @@ void main(){
         x.fillText('9', x0 + wPiso, y0);
         x.textBaseline = 'alphabetic';
         this._wmBottom = y0 + size * 0.40; // for the tagline/copy drawn in _drawUI
+      } else if (ch.type === 'work') {
+        const ps = this._dict().projects || [];
+        const boxes = this._hubCards(ps.length, w, h, dpr, narrow);
+        ps.forEach((p, i) => {
+          const [bx, by, bw, bh] = boxes[i];
+          const im = this._imgs[p.img];
+          if (im && im._ok) {
+            // cover-crop, top-aligned (same crop bias as the DOM embed poster)
+            const iw = p.imgW || im.naturalWidth, ih = p.imgH || im.naturalHeight;
+            const s = Math.max(bw / iw, bh / ih);
+            x.drawImage(im, (iw - bw / s) / 2, 0, bw / s, bh / s, bx, by, bw, bh);
+          } else {
+            x.fillStyle = '#141414';
+            x.fillRect(bx, by, bw, bh);
+            this._loadImage(p);
+          }
+          x.strokeStyle = '#262626';
+          x.lineWidth = line;
+          x.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+        });
       } else if (ch.type === 'project') {
         const p = ch.data;
         const [fx, fy, fw, fh] = this._projectImgRect(p, w, h, dpr, narrow);
-        if (p._img) {
-          x.drawImage(p._img, fx, fy, fw, fh);
+        const im = this._imgs[p.img];
+        if (im && im._ok) {
+          x.drawImage(im, fx, fy, fw, fh);
         } else {
           x.fillStyle = '#141414';
           x.fillRect(fx, fy, fw, fh);
           setF(x, '400 ' + (19 * dpr) + 'px ' + MONO);
           x.fillStyle = '#808080';
           x.textBaseline = 'middle';
-          const lt = 'LOADING ...';
+          const lt = ui.loading || 'LOADING ...';
           x.fillText(lt, fx + (fw - x.measureText(lt).width) / 2, fy + fh / 2);
           x.textBaseline = 'alphabetic';
         }
         x.strokeStyle = '#262626';
-        x.lineWidth = Math.max(1, Math.round(dpr));
+        x.lineWidth = line;
         x.strokeRect(fx + 0.5, fy + 0.5, fw - 1, fh - 1);
       }
 
@@ -532,7 +651,8 @@ void main(){
     }
 
     // UI layer (uTexUI): drawn into its own texture — gets the tube shape
-    // (barrel, scanlines, vignette) but is never displaced by the mouse trail
+    // (barrel, scanlines, vignette) but is never displaced by the mouse trail.
+    // Transparent background: alpha-composited over the content layer.
     _drawUI(ch) {
       const gl = this._gl;
       const w = this._canvas.width, h = this._canvas.height;
@@ -540,8 +660,8 @@ void main(){
       const c = this._uiCanvas || (this._uiCanvas = document.createElement('canvas'));
       c.width = w; c.height = h;
       const x = c.getContext('2d');
-      x.fillStyle = '#000';
-      x.fillRect(0, 0, w, h);
+      x.clearRect(0, 0, w, h);
+      const ui = this._dict().ui || {};
       const dpr = w / Math.max(this.clientWidth, 1);
       const narrow = this.clientWidth < 720;
       const padX = 36 * dpr;
@@ -565,38 +685,38 @@ void main(){
         x.fillStyle = '#a3a3a3';
         const gap = 36 * dpr;
         const linkY = navY + 3 * dpr;
-        const wc = x.measureText('contact').width;
-        const ww = x.measureText('work').width;
-        x.fillText('contact', w - padX - wc, linkY);
-        x.fillText('work', w - padX - wc - gap - ww, linkY);
+        const tW = ui.navWork || 'work', tC = ui.navContact || 'contact';
+        const wc = x.measureText(tC).width;
+        const ww = x.measureText(tW).width;
+        x.fillText(tC, w - padX - wc, linkY);
+        x.fillText(tW, w - padX - wc - gap - ww, linkY);
         rects.work = [w - padX - wc - gap - ww, linkY - 4 * dpr, ww, 24 * dpr];
         rects.contact = [w - padX - wc, linkY - 4 * dpr, wc, 24 * dpr];
       }
 
       if (ch.type === 'home') {
         // tagline + copy under the wordmark, like a standard hero
-        const capL = this.getAttribute('caption-left') || this.getAttribute('captionleft') || '';
-        const capC = this.getAttribute('caption-copy') || this.getAttribute('captioncopy') || '';
         let cy = (this._wmBottom || h * 0.55) + 44 * dpr;
         x.textBaseline = 'alphabetic';
-        if (capL) {
+        if (ui.tagline) {
           setF(x, '500 ' + (16 * dpr) + 'px ' + STACK, 0.02 * 16 * dpr);
           x.fillStyle = '#a3a3a3';
-          x.fillText(capL, (w - x.measureText(capL).width) / 2, cy);
+          x.fillText(ui.tagline, (w - x.measureText(ui.tagline).width) / 2, cy);
           cy += 30 * dpr;
         }
-        if (capC && !(narrow && this.clientHeight < 620)) {
+        if (ui.copy && !(narrow && this.clientHeight < 620)) {
           setF(x, '400 ' + (13.5 * dpr) + 'px ' + STACK);
           x.fillStyle = '#808080';
           const cmw = Math.min(520 * dpr, w - 2 * padX);
-          for (const ln of this._wrap(x, capC, cmw)) {
+          for (const ln of this._wrap(x, ui.copy, cmw)) {
             x.fillText(ln, (w - x.measureText(ln).width) / 2, cy);
             cy += 13.5 * 1.6 * dpr;
           }
         }
 
         // CTA row — 00s TV OSD-style bracketed menu items (primary + secondary)
-        const ctaTxt = '[ SEE OUR WORK ]', cta2Txt = '[ CONTACT US ]';
+        const ctaTxt = ui.ctaWork || '[ SEE OUR WORK ]';
+        const cta2Txt = ui.ctaContact || '[ CONTACT US ]';
         setF(x, '400 ' + (19 * dpr) + 'px ' + MONO, 0.1 * 19 * dpr);
         const w1c = x.measureText(ctaTxt).width;
         const w2c = x.measureText(cta2Txt).width;
@@ -621,6 +741,36 @@ void main(){
           rects.cta2 = [x1 + w1c + gapC, y1, w2c, pillH];
         }
         x.textBaseline = 'alphabetic';
+      } else if (ch.type === 'work') {
+        // hub: mini title + gallery of project cards, each jumping to its channel
+        const ps = this._dict().projects || [];
+        const boxes = this._hubCards(ps.length, w, h, dpr, narrow);
+        x.textBaseline = 'top';
+        setF(x, '500 ' + (13 * dpr) + 'px ' + STACK, 0.14 * 13 * dpr);
+        x.fillStyle = this.accent;
+        const eb = ui.workEyebrow || '>> SELECTED WORK';
+        x.fillText(eb, (w - x.measureText(eb).width) / 2, h * (narrow ? 0.14 : 0.18));
+        const tSize = (narrow ? 24 : 30) * dpr;
+        setF(x, '700 ' + tSize + 'px "Orbitron", ' + STACK, 0.01 * tSize);
+        x.fillStyle = '#fafafa';
+        const wt = ui.workTitle || 'Selected work.';
+        x.fillText(wt, (w - x.measureText(wt).width) / 2, h * (narrow ? 0.14 : 0.18) + 32 * dpr);
+        ps.forEach((p, i) => {
+          const [bx, by, bw, bh] = boxes[i];
+          const ty = by + bh + 14 * dpr;
+          setF(x, '600 ' + (11 * dpr) + 'px ' + STACK, 0.18 * 11 * dpr);
+          x.fillStyle = this.accent;
+          x.fillText('CH ' + p.ch, bx, ty);
+          setF(x, '500 ' + (11 * dpr) + 'px ' + STACK, 0.08 * 11 * dpr);
+          x.fillStyle = '#808080';
+          const yr = p.year || '';
+          x.fillText(yr, bx + bw - x.measureText(yr).width, ty);
+          setF(x, '700 ' + (15 * dpr) + 'px "Orbitron", ' + STACK, 0.02 * 15 * dpr);
+          x.fillStyle = '#fafafa';
+          x.fillText(p.title, bx, ty + 20 * dpr);
+          rects['proj' + i] = [bx, by, bw, bh + 44 * dpr];
+        });
+        x.textBaseline = 'alphabetic';
       } else if (ch.type === 'project') {
         const p = ch.data;
         const [fx, fy, fw, fh] = this._projectImgRect(p, w, h, dpr, narrow);
@@ -631,7 +781,7 @@ void main(){
 
         setF(x, '500 ' + (13 * dpr) + 'px ' + STACK, 0.14 * 13 * dpr);
         x.fillStyle = this.accent;
-        x.fillText('>> SELECTED WORK', lx, yy);
+        x.fillText(ui.workEyebrow || '>> SELECTED WORK', lx, yy);
         yy += 36 * dpr;
 
         let tSize = (narrow ? 22 : 30) * dpr;
@@ -661,7 +811,7 @@ void main(){
         for (const ln of this._wrap(x, p.meta || '', colW)) { x.fillText(ln, lx, yy); yy += 12 * 1.7 * dpr; }
         yy += 24 * dpr;
 
-        const vTxt = '[ VISIT SITE ]';
+        const vTxt = ui.visit || '[ VISIT SITE ]';
         setF(x, '400 ' + (19 * dpr) + 'px ' + MONO, 0.1 * 19 * dpr);
         x.fillStyle = this.accent;
         x.fillText(vTxt, lx, yy);
@@ -673,12 +823,12 @@ void main(){
         const cy0 = h * 0.28;
         setF(x, '500 ' + (13 * dpr) + 'px ' + STACK, 0.14 * 13 * dpr);
         x.fillStyle = this.accent;
-        let t = '>> CONTACT';
+        let t = ui.contactEyebrow || '>> CONTACT';
         x.fillText(t, (w - x.measureText(t).width) / 2, cy0);
 
         const tSize = (narrow ? 26 : 34) * dpr;
         setF(x, '700 ' + tSize + 'px "Orbitron", ' + STACK, 0.01 * tSize);
-        const t1 = "Let's build together";
+        const t1 = ui.contactTitle || "Let's build together";
         const w1 = x.measureText(t1).width;
         const cx0 = (w - w1 - x.measureText('.').width) / 2;
         const ty = cy0 + 36 * dpr;
@@ -689,11 +839,11 @@ void main(){
 
         setF(x, '400 ' + (16 * dpr) + 'px ' + STACK);
         x.fillStyle = '#a3a3a3';
-        t = 'One project at a time. Tell us about yours.';
+        t = ui.contactCopy || '';
         x.fillText(t, (w - x.measureText(t).width) / 2, ty + tSize * 1.6);
 
         // mailto CTA button + the address itself in small type below it
-        const bTxt = '[ CONTACT US ]';
+        const bTxt = ui.contactCta || '[ CONTACT US ]';
         setF(x, '400 ' + (21 * dpr) + 'px ' + MONO, 0.1 * 21 * dpr);
         x.fillStyle = this.accent;
         const bW = x.measureText(bTxt).width;
@@ -711,9 +861,43 @@ void main(){
         rects.mailto = [(w - mW) / 2, bY - 6 * dpr, mW, eY + 20 * dpr - bY];
       }
 
-      // channel up/down: small boxed arrows, bottom-right (paths — VT323's
-      // latin subset has no ▲▼); on home a SCROLL hint sits above them
-      Object.assign(rects, this._drawArrowBoxes(x, w, h, dpr, ch.type === 'home'));
+      // channel controls (▲/▼ + MENU), bottom-right
+      Object.assign(rects, this._drawControls(x, w, h, dpr, ui, ch.type === 'home'));
+
+      // OSD settings panel, above the controls
+      if (this._menuOpen) {
+        const pad = 36 * dpr;
+        const pw = 210 * dpr, ph = 72 * dpr;
+        const pxl = w - pad - pw;
+        const pb = rects.next[1] - (ch.type === 'home' ? 34 : 14) * dpr;
+        const pt = pb - ph;
+        x.fillStyle = '#0d0d0d';
+        x.fillRect(pxl, pt, pw, ph);
+        x.strokeStyle = '#262626';
+        x.lineWidth = Math.max(1, Math.round(dpr));
+        x.strokeRect(pxl + 0.5, pt + 0.5, pw - 1, ph - 1);
+        x.textBaseline = 'top';
+        setF(x, '600 ' + (10 * dpr) + 'px ' + STACK, 0.18 * 10 * dpr);
+        x.fillStyle = this.accent;
+        x.fillText(ui.settings || 'SETTINGS', pxl + 14 * dpr, pt + 12 * dpr);
+        setF(x, '500 ' + (12 * dpr) + 'px ' + STACK, 0.06 * 12 * dpr);
+        x.fillStyle = '#a3a3a3';
+        x.fillText(ui.language || 'LANGUAGE', pxl + 14 * dpr, pt + 40 * dpr);
+        setF(x, '400 ' + (15 * dpr) + 'px ' + MONO, 0.08 * 15 * dpr);
+        const esW = x.measureText('ES').width;
+        const enW = x.measureText('EN').width;
+        const esX = pxl + pw - 14 * dpr - esW;
+        const enX = esX - 26 * dpr - enW; // wide gap: the hitboxes must never overlap
+        const oy = pt + 38 * dpr;
+        x.fillStyle = this._lang === 'en' ? this.accent : '#808080';
+        x.fillText('EN', enX, oy);
+        x.fillStyle = this._lang === 'es' ? this.accent : '#808080';
+        x.fillText('ES', esX, oy);
+        rects.langEn = [enX - 4 * dpr, oy - 6 * dpr, enW + 8 * dpr, 26 * dpr];
+        rects.langEs = [esX - 4 * dpr, oy - 6 * dpr, esW + 8 * dpr, 26 * dpr];
+        rects.panel = [pxl, pt, pw, ph];
+        x.textBaseline = 'alphabetic';
+      }
 
       // channel indicator, bottom-left
       const pad = 36 * dpr;
@@ -756,7 +940,8 @@ void main(){
         if (!r) { a.style.display = 'none'; continue; }
         const [x1, y1] = this._screenPos(r[0], r[1]);
         const [x2, y2] = this._screenPos(r[0] + r[2], r[1] + r[3]);
-        const padHit = (key === 'prev' || key === 'next') ? 14 : 8;
+        const padHit = (key === 'prev' || key === 'next') ? 14
+          : (key === 'langEn' || key === 'langEs') ? 4 : 8;
         a.style.display = 'block';
         a.style.left = (Math.min(x1, x2) - padHit) + 'px';
         a.style.top = (Math.min(y1, y2) - padHit) + 'px';

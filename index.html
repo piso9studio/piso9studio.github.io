@@ -58,7 +58,7 @@
 <body>
 
   <div id="top" class="hero">
-    <piso9-hero accent="#ff8c00" strength="0.1" grain="on" crt="on" caption-left="A software studio" caption-copy="We design and build products end to end — browser extensions, web apps, and the systems behind them. Small by choice. Obsessive by default."></piso9-hero>
+    <piso9-hero accent="#ff8c00" strength="0.1" grain="on" crt="on"></piso9-hero>
     <noscript>
       <div class="hero-fallback">PISO<span class="accent">9</span></div>
     </noscript>
@@ -96,7 +96,7 @@
       <article class="project">
         <div class="project-head">
           <h2 class="project-title"><a href="https://www.topglo.com.ar" target="_blank" rel="noopener">topglo.com.ar ↗</a></h2>
-          <span class="project-year">2025</span>
+          <span class="project-year">2026</span>
         </div>
         <p class="project-desc">A site for Los Streamers Top Globales — built on our own time, for the community, unpaid and unasked. It got picked up fast, and the streamers themselves ran with it.</p>
         <div class="browser-card">
@@ -123,19 +123,61 @@
     <a href="mailto:hola@piso9.studio">HOLA@PISO9.STUDIO</a>
   </footer>
 
-  <!-- TV channel data: one entry per project (CH 1..N). Keep in sync with the
-       <article class="project"> fallbacks in #work above. -->
-  <script type="application/json" id="p9-channels">
-  { "projects": [
-    { "ch": 1, "title": "FORG1.COM", "url": "https://forg1.com", "year": "2026 — ONGOING",
-      "desc": "A rewards platform for the community of Forg1, a Counter-Strike streamer. A Chrome extension counts watch time and pays out points; the web app lets viewers redeem them for real prizes, enter raffles, and stake points on live CS2 match predictions.",
-      "meta": "CHROME EXTENSION + NEXT.JS · DESIGN, BUILD & OPERATIONS",
-      "img": "/assets/forg1.webp", "imgW": 1440, "imgH": 900 },
-    { "ch": 2, "title": "TOPGLO.COM.AR", "url": "https://www.topglo.com.ar", "year": "2025",
-      "desc": "A site for Los Streamers Top Globales — built on our own time, for the community, unpaid and unasked. It got picked up fast, and the streamers themselves ran with it.",
-      "meta": "WEB APP · SELF-INITIATED · COMMUNITY PROJECT",
-      "img": "/assets/topglo.webp", "imgW": 1419, "imgH": 983 }
-  ]}
+  <!-- TV data, one JSON per language (ui strings + projects, CH 2..N+1).
+       Keep both in sync with each other and with the #work fallbacks above. -->
+  <script type="application/json" id="p9-i18n-en">
+  {
+    "ui": {
+      "navWork": "work", "navContact": "contact",
+      "tagline": "A software studio",
+      "copy": "We design and build products end to end — browser extensions, web apps, and the systems behind them. Small by choice. Obsessive by default.",
+      "ctaWork": "[ SEE OUR WORK ]", "ctaContact": "[ CONTACT US ]",
+      "workEyebrow": ">> SELECTED WORK", "workTitle": "Selected work.",
+      "visit": "[ VISIT SITE ]", "loading": "LOADING ...",
+      "contactEyebrow": ">> CONTACT", "contactTitle": "Let's build together",
+      "contactCopy": "One project at a time. Tell us about yours.",
+      "contactCta": "[ CONTACT US ]",
+      "hint": "SCROLL / ARROW KEYS",
+      "menu": "MENU", "settings": "SETTINGS", "language": "LANGUAGE"
+    },
+    "projects": [
+      { "ch": 2, "title": "FORG1.COM", "url": "https://forg1.com", "year": "2026 — ONGOING",
+        "desc": "A rewards platform for the community of Forg1, a Counter-Strike streamer. A Chrome extension counts watch time and pays out points; the web app lets viewers redeem them for real prizes, enter raffles, and stake points on live CS2 match predictions.",
+        "meta": "CHROME EXTENSION + NEXT.JS · DESIGN, BUILD & OPERATIONS",
+        "img": "/assets/forg1.webp", "imgW": 1440, "imgH": 900 },
+      { "ch": 3, "title": "TOPGLO.COM.AR", "url": "https://www.topglo.com.ar", "year": "2026",
+        "desc": "A site for Los Streamers Top Globales — built on our own time, for the community, unpaid and unasked. It got picked up fast, and the streamers themselves ran with it.",
+        "meta": "WEB APP · SELF-INITIATED · COMMUNITY PROJECT",
+        "img": "/assets/topglo.webp", "imgW": 1419, "imgH": 983 }
+    ]
+  }
+  </script>
+  <script type="application/json" id="p9-i18n-es">
+  {
+    "ui": {
+      "navWork": "proyectos", "navContact": "contacto",
+      "tagline": "Un estudio de software",
+      "copy": "Diseñamos y construimos productos de punta a punta — extensiones de navegador, web apps y los sistemas detrás. Chicos por elección. Obsesivos por defecto.",
+      "ctaWork": "[ VER PROYECTOS ]", "ctaContact": "[ CONTACTANOS ]",
+      "workEyebrow": ">> PROYECTOS", "workTitle": "Trabajo seleccionado.",
+      "visit": "[ VISITAR SITIO ]", "loading": "CARGANDO ...",
+      "contactEyebrow": ">> CONTACTO", "contactTitle": "Construyamos juntos",
+      "contactCopy": "Un proyecto a la vez. Contanos el tuyo.",
+      "contactCta": "[ CONTACTANOS ]",
+      "hint": "SCROLL / FLECHAS",
+      "menu": "MENÚ", "settings": "AJUSTES", "language": "IDIOMA"
+    },
+    "projects": [
+      { "ch": 2, "title": "FORG1.COM", "url": "https://forg1.com", "year": "2026 — EN CURSO",
+        "desc": "Una plataforma de recompensas para la comunidad de Forg1, un streamer de Counter-Strike. Una extensión de Chrome cuenta el tiempo de visualización y paga puntos; la web app permite canjearlos por premios reales, entrar a sorteos y apostar puntos en predicciones de partidas de CS2 en vivo.",
+        "meta": "EXTENSIÓN DE CHROME + NEXT.JS · DISEÑO, DESARROLLO Y OPERACIONES",
+        "img": "/assets/forg1.webp", "imgW": 1440, "imgH": 900 },
+      { "ch": 3, "title": "TOPGLO.COM.AR", "url": "https://www.topglo.com.ar", "year": "2026",
+        "desc": "Un sitio para Los Streamers Top Globales — hecho en nuestro tiempo libre, para la comunidad, gratis y sin que nadie lo pida. Se difundió rápido y los propios streamers lo adoptaron.",
+        "meta": "WEB APP · INICIATIVA PROPIA · PROYECTO COMUNITARIO",
+        "img": "/assets/topglo.webp", "imgW": 1419, "imgH": 983 }
+    ]
+  }
   </script>
 
 </body>
