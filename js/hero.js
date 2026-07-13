@@ -191,9 +191,34 @@ void main(){
         e.preventDefault();
         this.switchChannel(typeof target === 'string' ? this._indexOf(target) : this._chIndex + target);
       });
-      wire('home', 'home'); wire('work', 'work'); wire('cta', 'work');
-      wire('contact', 'contact'); wire('cta2', 'contact');
+      wire('home', 'home'); wire('work', 'work');
+      this._overlays.cta.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (window.posthog) posthog.capture('home_cta_clicked', { cta: 'work' });
+        this.switchChannel(this._indexOf('work'));
+      });
+      wire('contact', 'contact');
+      this._overlays.cta2.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (window.posthog) posthog.capture('home_cta_clicked', { cta: 'contact' });
+        this.switchChannel(this._indexOf('contact'));
+      });
       wire('prev', -1); wire('next', +1);
+      this._overlays.visit.addEventListener('click', () => {
+        const ch = this._channels[this._chIndex];
+        if (window.posthog && ch.type === 'project' && ch.data) {
+          posthog.capture('project_site_visited', { project: ch.data.title, project_url: ch.data.url, source: 'visit_button' });
+        }
+      });
+      this._overlays.site.addEventListener('click', () => {
+        const ch = this._channels[this._chIndex];
+        if (window.posthog && ch.type === 'project' && ch.data) {
+          posthog.capture('project_site_visited', { project: ch.data.title, project_url: ch.data.url, source: 'screenshot' });
+        }
+      });
+      this._overlays.mailto.addEventListener('click', () => {
+        if (window.posthog) posthog.capture('contact_clicked');
+      });
       this._overlays.menu.addEventListener('click', (e) => {
         e.preventDefault();
         this._menuOpen = !this._menuOpen;
@@ -391,9 +416,11 @@ void main(){
 
     _setLang(l) {
       if (!this._dicts[l] || l === this._lang) return;
+      const prev = this._lang;
       this._lang = l;
       try { localStorage.setItem('p9-lang', l); } catch (e) { }
       document.documentElement.lang = l;
+      if (window.posthog) posthog.capture('language_switched', { from: prev, to: l });
       this._buildChannels();
       this._drawChannel();
     }
@@ -446,6 +473,15 @@ void main(){
         : 'PISO9 STUDIO';
       this._live.textContent = 'CH ' + ch.id + ' — ' + label;
       if (history.replaceState) history.replaceState(null, '', '#ch' + ch.id);
+      if (window.posthog) {
+        if (ch.type === 'work') {
+          posthog.capture('work_hub_viewed');
+        } else if (ch.type === 'project' && ch.data) {
+          posthog.capture('project_viewed', { project: ch.data.title, project_url: ch.data.url });
+        } else if (ch.type === 'contact') {
+          posthog.capture('contact_viewed');
+        }
+      }
     }
 
     _loadImage(p) {
