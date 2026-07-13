@@ -520,13 +520,16 @@ void main(){
 
     _wrap(x, text, maxW) {
       const lines = [];
-      let cur = '';
-      for (const wd of text.split(' ')) {
-        const t = cur ? cur + ' ' + wd : wd;
-        if (x.measureText(t).width > maxW && cur) { lines.push(cur); cur = wd; }
-        else cur = t;
+      // honor explicit newlines (\n) as forced breaks, then word-wrap each segment
+      for (const para of String(text).split('\n')) {
+        let cur = '';
+        for (const wd of para.split(' ')) {
+          const t = cur ? cur + ' ' + wd : wd;
+          if (x.measureText(t).width > maxW && cur) { lines.push(cur); cur = wd; }
+          else cur = t;
+        }
+        lines.push(cur);
       }
-      if (cur) lines.push(cur);
       return lines;
     }
 
