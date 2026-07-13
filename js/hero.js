@@ -38,12 +38,6 @@ void main(){
   vec2 cc = uv - 0.5;
   uv = 0.5 + cc * (1.0 + uCrt * 0.10 * dot(cc, cc) * 2.2);
   float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
-  // tv power-on: picture opens from a bright horizontal line
-  float openY = max(smoothstep(0.05, 0.55, uBoot), 0.004);
-  float openX = max(smoothstep(0.0, 0.30, uBoot), 0.30);
-  vec2 bc = uv - 0.5;
-  uv = 0.5 + vec2(bc.x / openX, bc.y / openY);
-  float insideBoot = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
   float aspect = uRes.x/uRes.y;
   vec2 disp = vec2(0.0);
   float energy = 0.0;
@@ -79,11 +73,9 @@ void main(){
   vec2 q = uv - 0.5;
   col *= 1.0 - dot(q,q)*0.55;
 
-  // boot: power-on line is pure white — no content visible until static clears
-  col = mix(col, vec3(0.95), 1.0 - smoothstep(0.38, 0.55, uBoot));
-  // static: boot phase + channel-switch burst share the same noise
-  float stat = (1.0 - smoothstep(1.4, 2.1, uBoot)) * smoothstep(0.22, 0.38, uBoot);
-  stat = max(stat, uSwitch);
+  // static: boot plays it once at load, dissolving into the content;
+  // channel-switch bursts reuse the same noise
+  float stat = max(1.0 - smoothstep(1.2, 1.8, uBoot), uSwitch);
   float n1 = hash(floor(uv*uRes*0.5) + vec2(fract(uTime*11.3)*291.0, fract(uTime*7.7)*173.0));
   col = mix(col, vec3(n1*n1*0.85), stat);
 
@@ -96,7 +88,7 @@ void main(){
 
   col += (hash(uv*uRes + fract(uTime)*137.0) - 0.5) * 0.05 * uGrain;
 
-  col = (col + vec3(0.0392)) * mix(1.0, inside, uCrt) * insideBoot;
+  col = (col + vec3(0.0392)) * mix(1.0, inside, uCrt);
   gl_FragColor = vec4(col, 1.0);
 }`;
 
