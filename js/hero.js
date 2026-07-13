@@ -169,7 +169,8 @@ void main(){
         langEn: mkOverlay('button', 'switch to English'),
         langEs: mkOverlay('button', 'cambiar a español'),
         visit: mkOverlay('a', 'visit project site'),
-        mailto: mkOverlay('a', 'email hola@piso9.studio', 'mailto:hola@piso9.studio'),
+        site: mkOverlay('a', 'visit project site'),
+        mailto: mkOverlay('a', 'email hello@piso9.studio', 'mailto:hello@piso9.studio'),
         panel: mkOverlay('div', '') // absorbs clicks inside the open OSD panel
       };
       this._overlays.panel.style.cursor = 'default';
@@ -184,6 +185,8 @@ void main(){
       }
       this._overlays.visit.target = '_blank';
       this._overlays.visit.rel = 'noopener';
+      this._overlays.site.target = '_blank';
+      this._overlays.site.rel = 'noopener';
       const wire = (key, target) => this._overlays[key].addEventListener('click', (e) => {
         e.preventDefault();
         this.switchChannel(typeof target === 'string' ? this._indexOf(target) : this._chIndex + target);
@@ -809,6 +812,8 @@ void main(){
         x.fillText(vTxt, lx, yy);
         rects.visit = [lx, yy, x.measureText(vTxt).width, 22 * dpr];
         this._overlays.visit.href = p.url;
+        rects.site = [fx, fy, fw, fh];
+        this._overlays.site.href = p.url;
         x.textBaseline = 'alphabetic';
       } else if (ch.type === 'contact') {
         x.textBaseline = 'top';
@@ -844,7 +849,7 @@ void main(){
 
         setF(x, '500 ' + (13 * dpr) + 'px ' + STACK, 0.06 * 13 * dpr);
         x.fillStyle = '#808080';
-        t = 'hola@piso9.studio';
+        t = 'hello@piso9.studio';
         const eW = x.measureText(t).width;
         const eY = bY + 42 * dpr;
         x.fillText(t, (w - eW) / 2, eY);
@@ -933,7 +938,8 @@ void main(){
         const [x1, y1] = this._screenPos(r[0], r[1]);
         const [x2, y2] = this._screenPos(r[0] + r[2], r[1] + r[3]);
         const padHit = (key === 'prev' || key === 'next') ? 14
-          : (key === 'langEn' || key === 'langEs') ? 4 : 8;
+          : (key === 'langEn' || key === 'langEs') ? 4
+          : key === 'site' ? 0 : 8;
         a.style.display = 'block';
         a.style.left = (Math.min(x1, x2) - padHit) + 'px';
         a.style.top = (Math.min(y1, y2) - padHit) + 'px';

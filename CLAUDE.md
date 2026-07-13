@@ -38,7 +38,7 @@ assets/         imágenes webp, og.png, favicons
 
 Las 4 fuentes críticas van con `<link rel="preload" as="font" crossorigin>` en `index.html` porque el hero las dibuja en canvas en el primer paint.
 
-**Layout y tono**: contenido en columnas de `max-width: 960px` con `padding` lateral de 32px; secciones separadas por ~128px. Estética retro-CRT (canal de TV, scanlines, brackets `[ ]`, labels `>>` en mayúsculas con letter-spacing). Copy en inglés, corto y seco. Email: hola@piso9.studio.
+**Layout y tono**: contenido en columnas de `max-width: 960px` con `padding` lateral de 32px; secciones separadas por ~128px. Estética retro-CRT (canal de TV, scanlines, brackets `[ ]`, labels `>>` en mayúsculas con letter-spacing). Copy en inglés, corto y seco. Email: hello@piso9.studio.
 
 ## El hero (`js/hero.js`) — la TV de canales
 
