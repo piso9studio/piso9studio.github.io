@@ -310,6 +310,7 @@ void main(){
       window.addEventListener('pointermove', this._onMove, { passive: true });
 
       this._onKey = (e) => {
+        if (this._standby) return;
         if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
         if (e.key === 'ArrowUp') { e.preventDefault(); this.switchChannel(this._chIndex + 1); }
         else if (e.key === 'ArrowDown') { e.preventDefault(); this.switchChannel(this._chIndex - 1); }
@@ -365,6 +366,19 @@ void main(){
       }
 
       this._t0 = performance.now();
+      // Standby: si la intro (js/intro.js) está activa, quedarse en static puro
+      // (uBoot congelado en 0) hasta que despache p9:power-on; ahí recién corre
+      // el boot. El static de acá y el del final de la intro son el mismo ruido,
+      // así que el empalme no se ve.
+      this._standby = document.documentElement.classList.contains('p9-intro');
+      if (this._standby) {
+        this._onPowerOn = () => {
+          this._standby = false;
+          this._t0 = performance.now();
+          this._tPrev = this._t0;
+        };
+        window.addEventListener('p9:power-on', this._onPowerOn, { once: true });
+      }
       this._reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       this._tPrev = this._t0;
       const loop = (now) => {
@@ -379,6 +393,7 @@ void main(){
       if (this._ro) this._ro.disconnect();
       window.removeEventListener('pointermove', this._onMove);
       window.removeEventListener('keydown', this._onKey);
+      if (this._onPowerOn) window.removeEventListener('p9:power-on', this._onPowerOn);
       document.removeEventListener('pointerdown', this._onDocDown);
       this.removeEventListener('wheel', this._onWheel);
       this.removeEventListener('pointerdown', this._onPDown);
@@ -1014,7 +1029,7 @@ void main(){
       gl.uniform1f(this._u.uStrength, this.strengthVal);
       gl.uniform1f(this._u.uGrain, this.grainVal);
       gl.uniform1f(this._u.uCrt, this.crtVal);
-      gl.uniform1f(this._u.uBoot, this._reduced ? 10 : Math.min((now - this._t0) / 1000, 10));
+      gl.uniform1f(this._u.uBoot, this._standby ? 0 : (this._reduced ? 10 : Math.min((now - this._t0) / 1000, 10)));
       gl.uniform2f(this._u.uMouse, this._mouse.x, this._mouse.y);
       gl.uniform4fv(this._u.uPts, this._pts);
       gl.uniform1fv(this._u.uAges, this._ages);
