@@ -888,7 +888,8 @@ void main(){
 
         setF(x, '500 ' + (13 * dpr) + 'px ' + STACK, 0.06 * 13 * dpr);
         x.fillStyle = '#808080';
-        t = 'hello@piso9.studio';
+        t = ui.email || 'hello@piso9.studio';
+        this._overlays.mailto.href = 'mailto:' + t;
         const eW = x.measureText(t).width;
         const eY = bY + 42 * dpr;
         x.fillText(t, (w - eW) / 2, eY);
