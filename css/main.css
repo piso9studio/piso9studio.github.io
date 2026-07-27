@@ -386,3 +386,68 @@ piso9-hero {
 .site-footer a:hover {
   color: var(--accent);
 }
+
+/* --- Intro: control remoto → tele ------------------------------------------
+   <piso9-intro> tapa el hero hasta que el usuario aprieta power (js/intro.js).
+   Solo existe bajo html.p9-intro; el propio intro.js saca la clase al terminar. */
+
+piso9-intro {
+  display: none;
+}
+
+.p9-intro piso9-intro {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+}
+
+piso9-intro.fade {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+piso9-intro canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.intro-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 7vh;
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 24px;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  pointer-events: none;
+  transition: opacity 0.35s;
+}
+
+.intro-hint.hidden {
+  opacity: 0;
+}
+
+.intro-power-btn {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.intro-power-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 50%;
+}

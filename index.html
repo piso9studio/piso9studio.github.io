@@ -42,7 +42,16 @@
 
   <!-- TV-only mode: hides the fallback sections below the hero before first paint.
        Removed by hero.js if WebGL is unavailable; never added without JS. -->
-  <script>document.documentElement.classList.add('p9-tv')</script>
+  <script>
+    document.documentElement.classList.add('p9-tv');
+    // Intro control remoto → tele: solo en la home "limpia" (sin deep-link) y
+    // con motion habilitado. Si intro.js no puede arrancar (sin WebGL, error),
+    // él mismo saca la clase y despacha p9:power-on (ver _bail en intro.js).
+    if (!/^#(ch\d+|work|contact)$/.test(location.hash) &&
+      !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+      document.documentElement.classList.add('p9-intro');
+    }
+  </script>
 
   <link rel="stylesheet" href="/css/main.css">
   <script>
@@ -95,6 +104,7 @@
     });
   </script>
   <script src="/js/hero.js" defer></script>
+  <script src="/js/intro.js" defer></script>
   <script src="/js/main.js" defer></script>
 
   <script type="application/ld+json">
@@ -117,6 +127,8 @@
       <div class="hero-fallback">PISO<span class="accent">9</span></div>
     </noscript>
   </div>
+
+  <piso9-intro></piso9-intro>
 
   <main>
     <section class="section">
@@ -198,6 +210,7 @@
       "contactCopy": "From idea to launch. Tell us yours.",
       "contactCta": "[ CONTACT US ]", "email": "hello@piso9.studio",
       "hint": "SCROLL / ARROW KEYS",
+      "introHint": "[ TURN ON THE TV ]", "introPower": "Turn on the TV",
       "menu": "MENU", "settings": "SETTINGS", "language": "LANGUAGE"
     },
     "projects": [
@@ -225,6 +238,7 @@
       "contactCopy": "De la idea al lanzamiento. Contanos la tuya.",
       "contactCta": "[ CONTACTANOS ]", "email": "hola@piso9.studio",
       "hint": "SCROLL / FLECHAS",
+      "introHint": "[ PRENDÉ LA TELE ]", "introPower": "Prender la tele",
       "menu": "MENÚ", "settings": "AJUSTES", "language": "IDIOMA"
     },
     "projects": [
