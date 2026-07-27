@@ -211,6 +211,7 @@ void main(){
       gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
       gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
       gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
       gl.useProgram(prog);
 
       this._u = {};
