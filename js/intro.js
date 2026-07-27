@@ -157,6 +157,19 @@ void main(){
 
   const FOV = 0.87; // ~50°
 
+  // Escena (unidades ~metros). El control "vive" a lo largo de Y con la cara en +Z;
+  // en reposo queda acostado mirando a cámara (REST_PITCH) y apenas girado (REST_YAW).
+  const REMOTE_POS = [0, -0.18, 1.05];   // landscape
+  const REMOTE_POS_P = [0, -0.35, 1.15]; // portrait (<0.9 de aspecto)
+  const REST_PITCH = -1.05, REST_YAW = 0.35;
+  const TV_POS = [0, 0.05, -1.6];
+  const SCREEN_W = 1.18, SCREEN_H = 0.82;
+  const SCREEN_LOCAL = [0, 0.02, 0.475]; // centro de pantalla (tele): 5 mm PROUD del
+                                         // frente del bisel (0.47) — el bisel es una
+                                         // caja sólida; detrás de 0.47 no se vería
+  const EYE0 = [0, 0.12, 2.5], TGT0 = [0, -0.05, 0];
+  const EYE0_P = [0, 0.05, 3.4];
+
   class Piso9Intro extends HTMLElement {
     connectedCallback() {
       if (this._init) return;
@@ -255,6 +268,7 @@ void main(){
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const w = this.clientWidth, h = this.clientHeight;
       if (!w || !h) return;
+      this._portrait = w / h < 0.9;
       this._canvas.width = Math.round(w * dpr);
       this._canvas.height = Math.round(h * dpr);
       this._gl.viewport(0, 0, this._canvas.width, this._canvas.height);
@@ -287,15 +301,106 @@ void main(){
       gl.drawElements(gl.TRIANGLES, mesh.n, gl.UNSIGNED_SHORT, 0);
     }
 
-    // Task 4 lo reemplaza con la escena real; por ahora un cubo de prueba
     _buildScene() {
-      this._testCube = this._mesh(box(0.5, 0.5, 0.5), { color: [1, 0.549, 0], local: M4.t([0, 0, 0]) });
+      const T = (v) => M4.t(v);
+      const CHARCOAL = [0.11, 0.11, 0.11], RUBBER = [0.19, 0.19, 0.19], DARK = [0.15, 0.15, 0.15];
+      const ACCENT = [1.0, 0.549, 0.0];
+
+      // --- control remoto (coords locales del grupo) ---------------------------
+      const r = [];
+      r.push(this._mesh(box(0.16, 0.42, 0.045), { color: CHARCOAL }));                       // cuerpo
+      this._powerBtn = this._mesh(cylinder(0.026, 0.02, 20), {
+        color: ACCENT, emissive: [0.12, 0.05, 0],
+        local: M4.mul(T([0.045, 0.155, 0.028]), M4.rotX(Math.PI / 2))
+      });
+      this._powerLocalPos = [0.045, 0.155, 0.028];
+      r.push(this._powerBtn);
+      this._irLed = this._mesh(box(0.02, 0.012, 0.012), { color: [0.12, 0.02, 0.02], local: T([0, 0.215, 0.01]) });
+      r.push(this._irLed);
+      r.push(this._mesh(box(0.09, 0.03, 0.018), { color: RUBBER, local: T([0, 0.04, 0.026]) }));   // d-pad horiz
+      r.push(this._mesh(box(0.03, 0.09, 0.018), { color: RUBBER, local: T([0, 0.04, 0.026]) }));   // d-pad vert
+      for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
+        r.push(this._mesh(cylinder(0.014, 0.012, 12), {
+          color: RUBBER,
+          local: M4.mul(T([-0.045 + col * 0.045, -0.055 - row * 0.045, 0.026]), M4.rotX(Math.PI / 2))
+        }));
+      }
+      // grabado PISO9 (textura canvas con Orbitron, se pinta en _labelTex)
+      r.push(this._mesh(quad(), {
+        mode: 2, blend: true,
+        local: M4.mul(T([0, -0.185, 0.0235]), M4.scl([0.1, 0.025, 1]))
+      }));
+      this._remoteMeshes = r;
+
+      // --- tele CRT -------------------------------------------------------------
+      const tv = [];
+      tv.push(this._mesh(box(1.5, 1.05, 0.9), { color: DARK }));                              // caja
+      tv.push(this._mesh(box(1.34, 0.94, 0.06), { color: [0.05, 0.05, 0.05], local: T([0, 0.02, 0.44]) })); // bisel
+      this._screen = this._mesh(quad(), {
+        mode: 1,
+        local: M4.mul(T(SCREEN_LOCAL.slice()), M4.scl([SCREEN_W, SCREEN_H, 1]))
+      });
+      tv.push(this._screen);
+      this._standbyLed = this._mesh(box(0.03, 0.015, 0.01), {
+        color: [0.1, 0.02, 0.02], emissive: [0.45, 0.03, 0.02], local: T([0.6, -0.44, 0.474]) // proud del bisel (0.47), si no queda oculto
+      });
+      tv.push(this._standbyLed);
+      tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([-0.55, -0.555, 0]) })); // pata
+      tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([0.55, -0.555, 0]) }));  // pata
+      tv.push(this._mesh(cylinder(0.008, 0.7, 6), {                                          // antena izq
+        color: [0.2, 0.2, 0.2], local: M4.mul(T([-0.18, 0.85, -0.1]), M4.rotZ(0.45))
+      }));
+      tv.push(this._mesh(cylinder(0.008, 0.7, 6), {                                          // antena der
+        color: [0.2, 0.2, 0.2], local: M4.mul(T([0.18, 0.85, -0.1]), M4.rotZ(-0.45))
+      }));
+      this._tvMeshes = tv;
+      this._tvGroup = M4.t(TV_POS);
+
+      this._rot = { yaw: 0, pitch: 0 };          // offsets del drag sobre el reposo
+      this._powerAnim = { depress: 0, drop: 0 }; // Task 6 los anima
+
+      this._labelTex();
+      if (document.fonts) {
+        document.fonts.load('700 44px "Orbitron"').then(() => this._labelTex()).catch(() => { });
+      }
+    }
+
+    _labelTex() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 64;
+      const x = c.getContext('2d');
+      x.clearRect(0, 0, 256, 64);
+      x.font = '700 40px "Orbitron", sans-serif';
+      x.textBaseline = 'middle';
+      const wP = x.measureText('PISO').width, w9 = x.measureText('9').width;
+      const x0 = (256 - wP - w9) / 2;
+      x.fillStyle = 'rgba(250,250,250,0.5)';
+      x.fillText('PISO', x0, 34);
+      x.fillStyle = 'rgba(255,140,0,0.75)';
+      x.fillText('9', x0 + wP, 34);
+      const gl = this._gl;
+      gl.bindTexture(gl.TEXTURE_2D, this._texL);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    }
+
+    // grupo del control: reposo + drag + bob de flotación + caída del power-on
+    _remoteGroup(t) {
+      const pos = (this._portrait ? REMOTE_POS_P : REMOTE_POS).slice();
+      pos[1] += Math.sin(t * 1.3) * 0.008 - this._powerAnim.drop;
+      const wobble = Math.sin(t * 0.7) * 0.02;
+      return M4.trs(pos, REST_PITCH + this._rot.pitch, REST_YAW + this._rot.yaw + wobble, 0);
     }
 
     _frame(now) {
       const gl = this._gl;
       const w = this._canvas.width, h = this._canvas.height;
       const t = (now - this._t0) / 1000;
+      if (!this._cam.dolly) {
+        this._cam.eye = (this._portrait ? EYE0_P : EYE0).slice();
+        this._cam.tgt = TGT0.slice();
+      }
       gl.clearColor(0.039, 0.039, 0.039, 1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.uniformMatrix4fv(this._u.uProj, false, M4.persp(FOV, w / h, 0.05, 20));
@@ -304,7 +409,9 @@ void main(){
       gl.uniform1f(this._u.uLine, this._uLine);
       gl.uniform1f(this._u.uStatic, this._uStatic);
       gl.uniform1f(this._u.uTime, t);
-      this._draw(this._testCube, M4.trs([0, 0, 0], t * 0.7, t * 0.9, 0));
+      const rg = this._remoteGroup(t);
+      for (let i = 0; i < this._tvMeshes.length; i++) this._draw(this._tvMeshes[i], this._tvGroup);
+      for (let i = 0; i < this._remoteMeshes.length; i++) this._draw(this._remoteMeshes[i], rg);
     }
   }
 
