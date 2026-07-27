@@ -11,6 +11,7 @@ index.html      página principal (metadata completa: SEO, OG, JSON-LD)
 404.html        "NO SIGNAL ON THIS CHANNEL"
 css/main.css    todos los estilos (@font-face incluidos)
 js/hero.js      <piso9-hero> — custom element WebGL (wordmark, CRT, mouse trail)
+js/intro.js     <piso9-intro> — intro control remoto → tele (WebGL propio, sin deps)
 js/main.js      facade click-to-load para embeds en vivo
 fonts/          woff2 self-hosted, solo pesos usados
 assets/         imágenes webp, og.png, favicons
@@ -49,6 +50,13 @@ Las 4 fuentes críticas van con `<link rel="preload" as="font" crossorigin>` en 
 **i18n**: todo el wording vive en dos JSON inline en `index.html` (`#p9-i18n-en` y `#p9-i18n-es`, cada uno con `ui` + `projects`). Default = idioma del navegador (es→ES, resto EN); la última selección persiste en `localStorage['p9-lang']` y se cambia desde el menú OSD (botón MENU → AJUSTES/SETTINGS → EN/ES). La capa UI del shader se compone con alpha (no aditiva) para que el panel del menú pueda tapar contenido.
 
 Atributos: `accent`, `strength`, `grain`, `crt`. `prefers-reduced-motion` salta el boot y hace los cambios de canal instantáneos. Sin WebGL, `_fallback()` quita `p9-tv` y restaura la página scrolleable (fallback solo en inglés). No tocar sin probar en desktop y mobile (el CRT se apaga bajo 720px; ahí proyecto y hub se apilan vertical).
+
+**Intro (`js/intro.js`)**: overlay `<piso9-intro>` con un control remoto 3D
+explorable (drag) y una tele CRT; apretar power dispara static + dolly y el
+evento `p9:power-on`, con el que el hero (en standby, `uBoot` congelado) corre
+su boot. Solo aparece sin deep-link, con motion y con WebGL (clase `p9-intro`
+del script inline del head); ante cualquier error hace `_bail()` y la página
+carga normal. Sonido sintetizado con Web Audio, cero assets.
 
 ## Reglas de performance
 

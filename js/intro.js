@@ -1,13 +1,7 @@
-/* <piso9-intro> — intro "control remoto → tele": escena WebGL propia que tapa
-   el hero. Drag rota el control; el power dispara la secuencia de encendido
-   (línea CRT + static + dolly a la pantalla) y al llenar el viewport despacha
-   'p9:power-on' para que el hero corra su boot (static contra static: el corte
-   no se ve). Sin dependencias. Diseño:
-   docs/superpowers/specs/2026-07-27-remote-tv-intro-design.md */
+/* <piso9-intro>: control remoto → tele, WebGL propio (ver CLAUDE.md). */
 (function () {
   if (customElements.get('piso9-intro')) return;
 
-  // --- math ------------------------------------------------------------------
   const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
   const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -15,9 +9,8 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const lerp3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
   const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
-  const ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; // cubic in-out
+  const ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-  // column-major, como espera WebGL
   const M4 = {
     mul(a, b) {
       const o = new Float32Array(16);
@@ -59,7 +52,6 @@
     }
   };
 
-  // --- shaders -----------------------------------------------------------------
   const VERT = `
 attribute vec3 aPos; attribute vec3 aNrm;
 uniform mat4 uProj, uView, uModel;
@@ -72,9 +64,7 @@ void main(){
   gl_Position = uProj * uView * wp;
 }`;
 
-  // uMode: 0 = pieza lit (Lambert + rim + fog), 1 = pantalla de la tele
-  // (apagada → línea blanca uLine → static uStatic, mismo hash del hero),
-  // 2 = label texturado (grabado PISO9)
+  // uMode: 0=pieza lit (Lambert+rim+fog), 1=pantalla (uLine→uStatic), 2=label
   const FRAG = `
 precision highp float;
 varying vec3 vNrm, vPos, vLocal;
@@ -112,7 +102,6 @@ void main(){
   gl_FragColor = vec4(col, 1.0);
 }`;
 
-  // --- geometría procedural: [px,py,pz,nx,ny,nz] intercalado + índices ---------
   function box(w, h, d) {
     const x = w / 2, y = h / 2, z = d / 2, P = [], I = [];
     const face = (a, b, c, dd, n) => {
@@ -129,7 +118,7 @@ void main(){
     return { pos: new Float32Array(P), idx: new Uint16Array(I) };
   }
 
-  function cylinder(r, h, seg) { // eje Y, tapas incluidas
+  function cylinder(r, h, seg) {
     const P = [], I = [];
     for (let i = 0; i < seg; i++) {
       const a0 = i / seg * Math.PI * 2, a1 = (i + 1) / seg * Math.PI * 2;
@@ -148,30 +137,24 @@ void main(){
     return { pos: new Float32Array(P), idx: new Uint16Array(I) };
   }
 
-  function quad() { // unitario en XY, normal +Z; tamaño vía M4.scl en el local
+  function quad() {
     return {
       pos: new Float32Array([-0.5, -0.5, 0, 0, 0, 1, 0.5, -0.5, 0, 0, 0, 1, 0.5, 0.5, 0, 0, 0, 1, -0.5, 0.5, 0, 0, 0, 1]),
       idx: new Uint16Array([0, 1, 2, 0, 2, 3])
     };
   }
 
-  const FOV = 0.87; // ~50°
+  const FOV = 0.87;
 
-  // Escena (unidades ~metros). El control "vive" a lo largo de Y con la cara en +Z;
-  // en reposo queda acostado mirando a cámara (REST_PITCH) y apenas girado (REST_YAW).
-  const REMOTE_POS = [0, -0.18, 1.05];   // landscape
-  const REMOTE_POS_P = [0, -0.35, 1.15]; // portrait (<0.9 de aspecto)
+  const REMOTE_POS = [0, -0.18, 1.05];
+  const REMOTE_POS_P = [0, -0.35, 1.15];
   const REST_PITCH = -1.05, REST_YAW = 0.35;
   const TV_POS = [0, 0.05, -1.6];
   const SCREEN_W = 1.18, SCREEN_H = 0.82;
-  const SCREEN_LOCAL = [0, 0.02, 0.475]; // centro de pantalla (tele): 5 mm PROUD del
-                                         // frente del bisel (0.47) — el bisel es una
-                                         // caja sólida; detrás de 0.47 no se vería
+  const SCREEN_LOCAL = [0, 0.02, 0.475]; // centro pantalla: 5mm proud del bisel (0.47, caja sólida)
   const EYE0 = [0, 0.12, 2.5], TGT0 = [0, -0.05, 0];
   const EYE0_P = [0, 0.05, 3.4];
 
-  // --- sonido sintetizado (cero assets). Se crea recién al apretar power,
-  // así el AudioContext nace dentro de un gesto del usuario. -------------------
   function makeAudio() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
@@ -239,8 +222,6 @@ void main(){
       window.removeEventListener('keydown', this._onIntroKey);
     }
 
-    // La página nunca queda en negro: sin WebGL o ante cualquier error se
-    // suelta el overlay y el hero arranca como si la intro no existiera.
     _bail() {
       document.documentElement.classList.remove('p9-intro');
       window.dispatchEvent(new Event('p9:power-on'));
@@ -248,7 +229,6 @@ void main(){
     }
 
     _boot() {
-      // i18n: mismo mecanismo que el hero (localStorage p9-lang o idioma del navegador)
       let lang = null;
       try { lang = localStorage.getItem('p9-lang'); } catch (e) { }
       if (lang !== 'en' && lang !== 'es') {
@@ -294,7 +274,6 @@ void main(){
       gl.enable(gl.DEPTH_TEST);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-      // textura del label (se dibuja en Task 4; 1x1 negro mientras tanto)
       this._texL = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, this._texL);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
@@ -315,7 +294,6 @@ void main(){
       this._ro.observe(this);
       this._resize();
 
-      // botón real (a11y): se reposiciona cada frame sobre el power proyectado
       this._btn = document.createElement('button');
       this._btn.className = 'intro-power-btn';
       this._btn.setAttribute('aria-label', ui.introPower || 'Turn on the TV');
@@ -402,9 +380,8 @@ void main(){
       const CHARCOAL = [0.11, 0.11, 0.11], RUBBER = [0.19, 0.19, 0.19], DARK = [0.15, 0.15, 0.15];
       const ACCENT = [1.0, 0.549, 0.0];
 
-      // --- control remoto (coords locales del grupo) ---------------------------
       const r = [];
-      r.push(this._mesh(box(0.16, 0.42, 0.045), { color: CHARCOAL }));                       // cuerpo
+      r.push(this._mesh(box(0.16, 0.42, 0.045), { color: CHARCOAL }));
       this._powerBtn = this._mesh(cylinder(0.026, 0.02, 20), {
         color: ACCENT, emissive: [0.12, 0.05, 0],
         local: M4.mul(T([0.045, 0.155, 0.028]), M4.rotX(Math.PI / 2))
@@ -413,47 +390,45 @@ void main(){
       r.push(this._powerBtn);
       this._irLed = this._mesh(box(0.02, 0.012, 0.012), { color: [0.12, 0.02, 0.02], local: T([0, 0.215, 0.01]) });
       r.push(this._irLed);
-      r.push(this._mesh(box(0.09, 0.03, 0.018), { color: RUBBER, local: T([0, 0.04, 0.026]) }));   // d-pad horiz
-      r.push(this._mesh(box(0.03, 0.09, 0.018), { color: RUBBER, local: T([0, 0.04, 0.026]) }));   // d-pad vert
+      r.push(this._mesh(box(0.09, 0.03, 0.018), { color: RUBBER, local: T([0, 0.04, 0.026]) }));
+      r.push(this._mesh(box(0.03, 0.09, 0.018), { color: RUBBER, local: T([0, 0.04, 0.026]) }));
       for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
         r.push(this._mesh(cylinder(0.014, 0.012, 12), {
           color: RUBBER,
           local: M4.mul(T([-0.045 + col * 0.045, -0.055 - row * 0.045, 0.026]), M4.rotX(Math.PI / 2))
         }));
       }
-      // grabado PISO9 (textura canvas con Orbitron, se pinta en _labelTex)
       r.push(this._mesh(quad(), {
         mode: 2, blend: true,
         local: M4.mul(T([0, -0.185, 0.0235]), M4.scl([0.1, 0.025, 1]))
       }));
       this._remoteMeshes = r;
 
-      // --- tele CRT -------------------------------------------------------------
       const tv = [];
-      tv.push(this._mesh(box(1.5, 1.05, 0.9), { color: DARK }));                              // caja
-      tv.push(this._mesh(box(1.34, 0.94, 0.06), { color: [0.05, 0.05, 0.05], local: T([0, 0.02, 0.44]) })); // bisel
+      tv.push(this._mesh(box(1.5, 1.05, 0.9), { color: DARK }));
+      tv.push(this._mesh(box(1.34, 0.94, 0.06), { color: [0.05, 0.05, 0.05], local: T([0, 0.02, 0.44]) }));
       this._screen = this._mesh(quad(), {
         mode: 1,
         local: M4.mul(T(SCREEN_LOCAL.slice()), M4.scl([SCREEN_W, SCREEN_H, 1]))
       });
       tv.push(this._screen);
       this._standbyLed = this._mesh(box(0.03, 0.015, 0.01), {
-        color: [0.1, 0.02, 0.02], emissive: [0.45, 0.03, 0.02], local: T([0.6, -0.44, 0.474]) // proud del bisel (0.47), si no queda oculto
+        color: [0.1, 0.02, 0.02], emissive: [0.45, 0.03, 0.02], local: T([0.6, -0.44, 0.474])
       });
       tv.push(this._standbyLed);
-      tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([-0.55, -0.555, 0]) })); // pata
-      tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([0.55, -0.555, 0]) }));  // pata
-      tv.push(this._mesh(cylinder(0.008, 0.7, 6), {                                          // antena izq
+      tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([-0.55, -0.555, 0]) }));
+      tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([0.55, -0.555, 0]) }));
+      tv.push(this._mesh(cylinder(0.008, 0.7, 6), {
         color: [0.2, 0.2, 0.2], local: M4.mul(T([-0.18, 0.85, -0.1]), M4.rotZ(0.45))
       }));
-      tv.push(this._mesh(cylinder(0.008, 0.7, 6), {                                          // antena der
+      tv.push(this._mesh(cylinder(0.008, 0.7, 6), {
         color: [0.2, 0.2, 0.2], local: M4.mul(T([0.18, 0.85, -0.1]), M4.rotZ(-0.45))
       }));
       this._tvMeshes = tv;
       this._tvGroup = M4.t(TV_POS);
 
-      this._rot = { yaw: 0, pitch: 0 };          // offsets del drag sobre el reposo
-      this._powerAnim = { depress: 0, drop: 0 }; // Task 6 los anima
+      this._rot = { yaw: 0, pitch: 0 };
+      this._powerAnim = { depress: 0, drop: 0 };
 
       this._labelTex();
       if (document.fonts) {
@@ -481,7 +456,6 @@ void main(){
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     }
 
-    // grupo del control: reposo + drag + bob de flotación + caída del power-on
     _remoteGroup(t) {
       const pos = (this._portrait ? REMOTE_POS_P : REMOTE_POS).slice();
       pos[1] += Math.sin(t * 1.3) * 0.008 - this._powerAnim.drop;
@@ -496,7 +470,6 @@ void main(){
       const dt = Math.min((now - (this._tPrev || now)) / 1000, 0.05);
       this._tPrev = now;
       if (!this._drag && !this._power) {
-        // inercia + resorte suave de vuelta al reposo
         this._vel.yaw += -this._rot.yaw * 4 * dt;
         this._vel.pitch += -this._rot.pitch * 4 * dt;
         const damp = Math.exp(-2.2 * dt);
@@ -506,14 +479,11 @@ void main(){
       }
       if (this._power) {
         const tp = (now - this._power.t0) / 1000;
-        // botón: se hunde y vuelve
         this._powerAnim.depress = tp < 0.06 ? tp / 0.06 : Math.max(0, 1 - (tp - 0.06) / 0.1);
         this._powerBtn.local = M4.mul(
           M4.t([this._powerLocalPos[0], this._powerLocalPos[1], this._powerLocalPos[2] - 0.01 * this._powerAnim.depress]),
           M4.rotX(Math.PI / 2));
-        // LED IR parpadea mandando la señal
         this._irLed.emissive = tp < 0.3 && Math.floor(tp * 25) % 2 === 0 ? [0.5, 0.06, 0.03] : [0, 0, 0];
-        // la tele responde: thunk + línea + standby off
         if (tp >= 0.15 && !this._power.thunked) {
           this._power.thunked = true;
           if (this._audio) this._audio.thunk();
@@ -526,7 +496,6 @@ void main(){
           this._power.hissed = true;
           if (this._audio) this._audio.hissOn();
         }
-        // dolly a la pantalla + el control cae fuera de cuadro
         const k = ease(clamp((tp - 0.7) / 1.2, 0, 1));
         if (k > 0) {
           this._cam.dolly = true;
@@ -535,7 +504,7 @@ void main(){
           const sc = [TV_POS[0] + SCREEN_LOCAL[0], TV_POS[1] + SCREEN_LOCAL[1], TV_POS[2] + SCREEN_LOCAL[2]];
           const dH = (SCREEN_H / 2) / Math.tan(FOV / 2);
           const dW = (SCREEN_W / 2) / (Math.tan(FOV / 2) * asp);
-          const dEnd = Math.min(dH, dW) * 0.96; // 4% de sobrellenado: los bordes nunca entran
+          const dEnd = Math.min(dH, dW) * 0.96; // 4% de margen: bordes no entran
           const eye0 = (this._portrait ? EYE0_P : EYE0);
           this._cam.eye = lerp3(eye0, [sc[0], sc[1], sc[2] + dEnd], k);
           this._cam.tgt = lerp3(TGT0, sc, k);
@@ -562,7 +531,6 @@ void main(){
       for (let i = 0; i < this._tvMeshes.length; i++) this._draw(this._tvMeshes[i], this._tvGroup);
       for (let i = 0; i < this._remoteMeshes.length; i++) this._draw(this._remoteMeshes[i], rg);
 
-      // proyectar el power → botón a11y + hover
       const ps = this._powerScreen();
       if (ps) {
         const d = ps.r * 2.2;
@@ -590,7 +558,7 @@ void main(){
       if (c[3] <= 0) return null;
       const x = (c[0] / c[3] * 0.5 + 0.5) * w;
       const y = (1 - (c[1] / c[3] * 0.5 + 0.5)) * h;
-      // radio: proyectar un punto desplazado 0.026 (radio del botón) hacia la derecha de cámara
+      // radio: proyecta punto +0.026 (radio) en X
       const wc2 = [wc[0] + 0.026, wc[1], wc[2]];
       const c2 = M4.xform(vp, [wc2[0], wc2[1], wc2[2], 1]);
       const r = Math.abs((c2[0] / c2[3] * 0.5 + 0.5) * w - x);
@@ -611,8 +579,6 @@ void main(){
     }
 
     _handoff() {
-      // primero arranca el boot del hero abajo del overlay; después un fade
-      // cortito de static contra static y afuera
       window.dispatchEvent(new Event('p9:power-on'));
       if (this._audio) this._audio.hissOff(0.5);
       this.classList.add('fade');
