@@ -170,6 +170,61 @@ void main(){
   const EYE0 = [0, 0.12, 2.5], TGT0 = [0, -0.05, 0];
   const EYE0_P = [0, 0.05, 3.4];
 
+  // --- sonido sintetizado (cero assets). Se crea recién al apretar power,
+  // así el AudioContext nace dentro de un gesto del usuario. -------------------
+  function makeAudio() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try {
+      const ctx = new AC();
+      const master = ctx.createGain();
+      master.gain.value = 0.5;
+      master.connect(ctx.destination);
+      const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const nd = noiseBuf.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+      const burst = (dur, type, freq, gain) => {
+        const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+        const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+        const g = ctx.createGain(); g.gain.value = 0;
+        src.connect(f); f.connect(g); g.connect(master);
+        const t = ctx.currentTime;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(gain, t + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        src.start(t); src.stop(t + dur + 0.1);
+      };
+      const a = {
+        click() { burst(0.05, 'highpass', 2200, 0.35); },
+        thunk() {
+          const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime;
+          o.type = 'sine';
+          o.frequency.setValueAtTime(130, t);
+          o.frequency.exponentialRampToValueAtTime(38, t + 0.22);
+          g.gain.setValueAtTime(0.6, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+          o.connect(g); g.connect(master);
+          o.start(t); o.stop(t + 0.32);
+          burst(0.15, 'lowpass', 400, 0.25);
+        },
+        hissOn() {
+          a._h = ctx.createBufferSource(); a._h.buffer = noiseBuf; a._h.loop = true;
+          const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 4200; f.Q.value = 0.4;
+          a._hg = ctx.createGain(); a._hg.gain.value = 0;
+          a._h.connect(f); f.connect(a._hg); a._hg.connect(master);
+          a._h.start();
+          a._hg.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.25);
+        },
+        hissOff(dur) {
+          if (!a._hg) { try { ctx.close(); } catch (e) { } return; }
+          a._hg.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + dur);
+          setTimeout(() => { try { a._h.stop(); ctx.close(); } catch (e) { } }, dur * 1000 + 120);
+        }
+      };
+      return a;
+    } catch (e) { return null; }
+  }
+
   class Piso9Intro extends HTMLElement {
     connectedCallback() {
       if (this._init) return;
@@ -449,6 +504,48 @@ void main(){
         this._rot.yaw = clamp(this._rot.yaw + this._vel.yaw * dt, -2.5, 2.5);
         this._rot.pitch = clamp(this._rot.pitch + this._vel.pitch * dt, -1.4, 1.4);
       }
+      if (this._power) {
+        const tp = (now - this._power.t0) / 1000;
+        // botón: se hunde y vuelve
+        this._powerAnim.depress = tp < 0.06 ? tp / 0.06 : Math.max(0, 1 - (tp - 0.06) / 0.1);
+        this._powerBtn.local = M4.mul(
+          M4.t([this._powerLocalPos[0], this._powerLocalPos[1], this._powerLocalPos[2] - 0.01 * this._powerAnim.depress]),
+          M4.rotX(Math.PI / 2));
+        // LED IR parpadea mandando la señal
+        this._irLed.emissive = tp < 0.3 && Math.floor(tp * 25) % 2 === 0 ? [0.5, 0.06, 0.03] : [0, 0, 0];
+        // la tele responde: thunk + línea + standby off
+        if (tp >= 0.15 && !this._power.thunked) {
+          this._power.thunked = true;
+          if (this._audio) this._audio.thunk();
+          this._standbyLed.emissive = [0, 0, 0];
+          this._standbyLed.color = [0.04, 0.04, 0.04];
+        }
+        this._uLine = clamp((tp - 0.15) / 0.3, 0, 1);
+        this._uStatic = clamp((tp - 0.45) / 0.15, 0, 1);
+        if (this._uStatic > 0 && !this._power.hissed) {
+          this._power.hissed = true;
+          if (this._audio) this._audio.hissOn();
+        }
+        // dolly a la pantalla + el control cae fuera de cuadro
+        const k = ease(clamp((tp - 0.7) / 1.2, 0, 1));
+        if (k > 0) {
+          this._cam.dolly = true;
+          const cw = this.clientWidth, chh = this.clientHeight;
+          const asp = cw / chh;
+          const sc = [TV_POS[0] + SCREEN_LOCAL[0], TV_POS[1] + SCREEN_LOCAL[1], TV_POS[2] + SCREEN_LOCAL[2]];
+          const dH = (SCREEN_H / 2) / Math.tan(FOV / 2);
+          const dW = (SCREEN_W / 2) / (Math.tan(FOV / 2) * asp);
+          const dEnd = Math.min(dH, dW) * 0.96; // 4% de sobrellenado: los bordes nunca entran
+          const eye0 = (this._portrait ? EYE0_P : EYE0);
+          this._cam.eye = lerp3(eye0, [sc[0], sc[1], sc[2] + dEnd], k);
+          this._cam.tgt = lerp3(TGT0, sc, k);
+          this._powerAnim.drop = 1.3 * k * k;
+        }
+        if (tp >= 1.95 && !this._power.done) {
+          this._power.done = true;
+          this._handoff();
+        }
+      }
       if (!this._cam.dolly) {
         this._cam.eye = (this._portrait ? EYE0_P : EYE0).slice();
         this._cam.tgt = TGT0.slice();
@@ -502,7 +599,27 @@ void main(){
 
     _press() {
       if (this._power) return;
-      console.log('[intro] power!'); // Task 6 lo reemplaza por la secuencia real
+      this._power = { t0: performance.now(), thunked: false, hissed: false, done: false };
+      this._audio = makeAudio();
+      if (this._audio) this._audio.click();
+      if (window.posthog) posthog.capture('intro_power_on', {
+        lang: this._lang,
+        ms_to_press: Math.round(performance.now() - this._shownAt)
+      });
+      this._btn.disabled = true;
+      this._hint.classList.add('hidden');
+    }
+
+    _handoff() {
+      // primero arranca el boot del hero abajo del overlay; después un fade
+      // cortito de static contra static y afuera
+      window.dispatchEvent(new Event('p9:power-on'));
+      if (this._audio) this._audio.hissOff(0.5);
+      this.classList.add('fade');
+      setTimeout(() => {
+        document.documentElement.classList.remove('p9-intro');
+        this.remove();
+      }, 160);
     }
   }
 
