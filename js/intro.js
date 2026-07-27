@@ -181,6 +181,7 @@ void main(){
     disconnectedCallback() {
       cancelAnimationFrame(this._raf);
       if (this._ro) this._ro.disconnect();
+      window.removeEventListener('keydown', this._onIntroKey);
     }
 
     // La página nunca queda en negro: sin WebGL o ante cualquier error se
@@ -258,6 +259,46 @@ void main(){
       this._ro = new ResizeObserver(() => this._resize());
       this._ro.observe(this);
       this._resize();
+
+      // botón real (a11y): se reposiciona cada frame sobre el power proyectado
+      this._btn = document.createElement('button');
+      this._btn.className = 'intro-power-btn';
+      this._btn.setAttribute('aria-label', ui.introPower || 'Turn on the TV');
+      this._btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+      this._btn.addEventListener('click', () => this._press());
+      this.appendChild(this._btn);
+
+      this._drag = null;
+      this._vel = { yaw: 0, pitch: 0 };
+      this._px = -1; this._py = -1;
+      this.addEventListener('pointerdown', (e) => {
+        this.setPointerCapture(e.pointerId);
+        this._drag = { x: e.clientX, y: e.clientY, t: performance.now() };
+        this._vel.yaw = 0; this._vel.pitch = 0;
+      });
+      this.addEventListener('pointermove', (e) => {
+        this._px = e.clientX; this._py = e.clientY;
+        if (!this._drag) return;
+        const now = performance.now();
+        const dt = Math.max(now - this._drag.t, 1) / 1000;
+        const dx = (e.clientX - this._drag.x) * 0.005;
+        const dy = (e.clientY - this._drag.y) * 0.005;
+        this._rot.yaw = clamp(this._rot.yaw + dx, -2.5, 2.5);
+        this._rot.pitch = clamp(this._rot.pitch + dy, -1.4, 1.4);
+        this._vel.yaw = dx / dt; this._vel.pitch = dy / dt;
+        this._drag = { x: e.clientX, y: e.clientY, t: now };
+      });
+      const endDrag = () => { this._drag = null; };
+      this.addEventListener('pointerup', endDrag);
+      this.addEventListener('pointercancel', endDrag);
+
+      this._onIntroKey = (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && document.activeElement !== this._btn) {
+          e.preventDefault();
+          this._press();
+        }
+      };
+      window.addEventListener('keydown', this._onIntroKey);
 
       this._t0 = performance.now();
       const loop = (now) => { this._raf = requestAnimationFrame(loop); this._frame(now); };
@@ -397,6 +438,17 @@ void main(){
       const gl = this._gl;
       const w = this._canvas.width, h = this._canvas.height;
       const t = (now - this._t0) / 1000;
+      const dt = Math.min((now - (this._tPrev || now)) / 1000, 0.05);
+      this._tPrev = now;
+      if (!this._drag && !this._power) {
+        // inercia + resorte suave de vuelta al reposo
+        this._vel.yaw += -this._rot.yaw * 4 * dt;
+        this._vel.pitch += -this._rot.pitch * 4 * dt;
+        const damp = Math.exp(-2.2 * dt);
+        this._vel.yaw *= damp; this._vel.pitch *= damp;
+        this._rot.yaw = clamp(this._rot.yaw + this._vel.yaw * dt, -2.5, 2.5);
+        this._rot.pitch = clamp(this._rot.pitch + this._vel.pitch * dt, -1.4, 1.4);
+      }
       if (!this._cam.dolly) {
         this._cam.eye = (this._portrait ? EYE0_P : EYE0).slice();
         this._cam.tgt = TGT0.slice();
@@ -412,6 +464,45 @@ void main(){
       const rg = this._remoteGroup(t);
       for (let i = 0; i < this._tvMeshes.length; i++) this._draw(this._tvMeshes[i], this._tvGroup);
       for (let i = 0; i < this._remoteMeshes.length; i++) this._draw(this._remoteMeshes[i], rg);
+
+      // proyectar el power → botón a11y + hover
+      const ps = this._powerScreen();
+      if (ps) {
+        const d = ps.r * 2.2;
+        this._btn.style.left = (ps.x - d / 2) + 'px';
+        this._btn.style.top = (ps.y - d / 2) + 'px';
+        this._btn.style.width = d + 'px';
+        this._btn.style.height = d + 'px';
+        this._hovered = !this._power && this._px >= 0 &&
+          Math.hypot(this._px - ps.x, this._py - ps.y) < Math.max(ps.r * 1.4, 24);
+      } else {
+        this._hovered = false;
+      }
+      const glow = this._hovered ? 0.35 : 0.12;
+      const e0 = this._powerBtn.emissive;
+      this._powerBtn.emissive = [lerp(e0[0], glow, 0.2), lerp(e0[1], glow * 0.42, 0.2), lerp(e0[2], 0, 0.2)];
+    }
+
+    _powerScreen() {
+      const w = this.clientWidth, h = this.clientHeight;
+      if (!w || !h) return null;
+      const vp = M4.mul(M4.persp(FOV, w / h, 0.05, 20), M4.lookAt(this._cam.eye, this._cam.tgt, [0, 1, 0]));
+      const g = this._remoteGroup((performance.now() - this._t0) / 1000);
+      const wc = M4.xform(g, this._powerLocalPos);
+      const c = M4.xform(vp, [wc[0], wc[1], wc[2], 1]);
+      if (c[3] <= 0) return null;
+      const x = (c[0] / c[3] * 0.5 + 0.5) * w;
+      const y = (1 - (c[1] / c[3] * 0.5 + 0.5)) * h;
+      // radio: proyectar un punto desplazado 0.026 (radio del botón) hacia la derecha de cámara
+      const wc2 = [wc[0] + 0.026, wc[1], wc[2]];
+      const c2 = M4.xform(vp, [wc2[0], wc2[1], wc2[2], 1]);
+      const r = Math.abs((c2[0] / c2[3] * 0.5 + 0.5) * w - x);
+      return { x, y, r: Math.max(r, 10) };
+    }
+
+    _press() {
+      if (this._power) return;
+      console.log('[intro] power!'); // Task 6 lo reemplaza por la secuencia real
     }
   }
 
