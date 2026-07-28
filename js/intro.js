@@ -69,7 +69,7 @@ void main(){
 precision highp float;
 varying vec3 vNrm, vPos, vLocal;
 uniform vec3 uColor, uEmissive, uEye;
-uniform float uMode, uLine, uStatic, uTime;
+uniform float uMode, uLine, uStatic, uTime, uCrtI;
 uniform sampler2D uTexL;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 void main(){
@@ -93,8 +93,14 @@ void main(){
       float line = 1.0 - smoothstep(band * 0.7, band, abs(uv.y - 0.5));
       col = mix(col, vec3(1.0 + 2.0 * (1.0 - uLine)), line * (1.0 - uStatic));
     }
-    float n = hash(floor(uv * vec2(320.0, 240.0)) + vec2(fract(uTime*11.3)*291.0, fract(uTime*7.7)*173.0));
-    col = mix(col, vec3(n*n*0.85), uStatic);
+    float n = hash(floor(gl_FragCoord.xy * 0.5) + vec2(fract(uTime*11.3)*291.0, fract(uTime*7.7)*173.0));
+    vec3 st = vec3(n * n * 0.85);
+    // mismo post-procesado que el static del boot del hero, para que al sacar
+    // el overlay no se note el corte (scanlines + fosforo + lift)
+    st *= 1.0 - uCrtI * 0.10 * (0.5 + 0.5 * sin(gl_FragCoord.y * 1.7));
+    st *= 1.0 - uCrtI * 0.03 * step(2.0, mod(gl_FragCoord.x, 3.0));
+    st += 0.0392;
+    col = mix(col, st, uStatic);
     gl_FragColor = vec4(col, 1.0);
     return;
   }
@@ -279,7 +285,7 @@ void main(){
       gl.useProgram(prog);
 
       this._u = {};
-      ['uProj', 'uView', 'uModel', 'uColor', 'uEmissive', 'uEye', 'uMode', 'uLine', 'uStatic', 'uTime', 'uTexL'].forEach(n => {
+      ['uProj', 'uView', 'uModel', 'uColor', 'uEmissive', 'uEye', 'uMode', 'uLine', 'uStatic', 'uTime', 'uTexL', 'uCrtI'].forEach(n => {
         this._u[n] = gl.getUniformLocation(prog, n);
       });
       this._aPos = gl.getAttribLocation(prog, 'aPos');
@@ -511,8 +517,8 @@ void main(){
         if (tp >= 0.15 && !this._power.thunked) {
           this._power.thunked = true;
           if (this._audio) this._audio.thunk();
-          this._standbyLed.emissive = [0, 0, 0];
-          this._standbyLed.color = [0.04, 0.04, 0.04];
+          this._standbyLed.emissive = [0.08, 0.5, 0.12]; // encendida: LED verde
+          this._standbyLed.color = [0.04, 0.16, 0.05];
         }
         this._uLine = clamp((tp - 0.15) / 0.3, 0, 1);
         this._uStatic = clamp((tp - 0.45) / 0.15, 0, 1);
@@ -553,6 +559,7 @@ void main(){
       gl.uniform1f(this._u.uLine, this._uLine);
       gl.uniform1f(this._u.uStatic, this._uStatic);
       gl.uniform1f(this._u.uTime, t);
+      gl.uniform1f(this._u.uCrtI, this.clientWidth < 720 ? 0 : 1);
       const rg = this._remoteGroup(t);
       const tg = this._tvGroup();
       this._draw(this._bgMesh, null);
