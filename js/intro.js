@@ -149,7 +149,10 @@ void main(){
   const REMOTE_POS = [0, -0.18, 1.05];
   const REMOTE_POS_P = [0, -0.35, 1.15];
   const REST_PITCH = -1.05, REST_YAW = 0.35;
-  const TV_POS = [0, 0.05, -1.6];
+  const TV_POS = [-0.55, 0.18, -1.6];   // arriba-izquierda (landscape)
+  const TV_POS_P = [-0.12, 0.5, -2.0];  // portrait: más centrada y alta
+  const TV_YAW = 0.55;                  // girada: lateral izquierdo hacia cámara;
+                                         // el dolly la endereza (yaw*(1-k))
   const SCREEN_W = 1.18, SCREEN_H = 0.82;
   const SCREEN_LOCAL = [0, 0.02, 0.475]; // centro pantalla: 5mm proud del bisel (0.47, caja sólida)
   const EYE0 = [0, 0.12, 2.5], TGT0 = [0, -0.05, 0];
@@ -244,11 +247,6 @@ void main(){
       const gl = this._canvas.getContext('webgl', { antialias: true, alpha: false, powerPreference: 'high-performance' });
       if (!gl) { this._bail(); return; }
       this._gl = gl;
-
-      this._hint = document.createElement('p');
-      this._hint.className = 'intro-hint';
-      this._hint.textContent = ui.introHint || '[ TURN ON THE TV ]';
-      this.appendChild(this._hint);
 
       const compile = (type, src) => {
         const s = gl.createShader(type);
@@ -413,7 +411,7 @@ void main(){
       });
       tv.push(this._screen);
       this._standbyLed = this._mesh(box(0.03, 0.015, 0.01), {
-        color: [0.1, 0.02, 0.02], emissive: [0.45, 0.03, 0.02], local: T([0.6, -0.44, 0.474])
+        color: [0.1, 0.02, 0.02], emissive: [0.45, 0.03, 0.02], local: T([-0.6, -0.44, 0.474])
       });
       tv.push(this._standbyLed);
       tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([-0.55, -0.555, 0]) }));
@@ -425,9 +423,9 @@ void main(){
         color: [0.2, 0.2, 0.2], local: M4.mul(T([0.18, 0.85, -0.1]), M4.rotZ(-0.45))
       }));
       this._tvMeshes = tv;
-      this._tvGroup = M4.t(TV_POS);
 
       this._rot = { yaw: 0, pitch: 0 };
+      this._dollyK = 0;
       this._powerAnim = { depress: 0, drop: 0 };
 
       this._labelTex();
@@ -461,6 +459,10 @@ void main(){
       pos[1] += Math.sin(t * 1.3) * 0.008 - this._powerAnim.drop;
       const wobble = Math.sin(t * 0.7) * 0.02;
       return M4.trs(pos, REST_PITCH + this._rot.pitch, REST_YAW + this._rot.yaw + wobble, 0);
+    }
+
+    _tvGroup() {
+      return M4.trs(this._portrait ? TV_POS_P : TV_POS, 0, TV_YAW * (1 - this._dollyK), 0);
     }
 
     _frame(now) {
@@ -497,11 +499,13 @@ void main(){
           if (this._audio) this._audio.hissOn();
         }
         const k = ease(clamp((tp - 0.7) / 1.2, 0, 1));
+        this._dollyK = k;
         if (k > 0) {
           this._cam.dolly = true;
           const cw = this.clientWidth, chh = this.clientHeight;
           const asp = cw / chh;
-          const sc = [TV_POS[0] + SCREEN_LOCAL[0], TV_POS[1] + SCREEN_LOCAL[1], TV_POS[2] + SCREEN_LOCAL[2]];
+          const tp0 = this._portrait ? TV_POS_P : TV_POS;
+          const sc = [tp0[0] + SCREEN_LOCAL[0], tp0[1] + SCREEN_LOCAL[1], tp0[2] + SCREEN_LOCAL[2]];
           const dH = (SCREEN_H / 2) / Math.tan(FOV / 2);
           const dW = (SCREEN_W / 2) / (Math.tan(FOV / 2) * asp);
           const dEnd = Math.min(dH, dW) * 0.96; // 4% de margen: bordes no entran
@@ -528,7 +532,8 @@ void main(){
       gl.uniform1f(this._u.uStatic, this._uStatic);
       gl.uniform1f(this._u.uTime, t);
       const rg = this._remoteGroup(t);
-      for (let i = 0; i < this._tvMeshes.length; i++) this._draw(this._tvMeshes[i], this._tvGroup);
+      const tg = this._tvGroup();
+      for (let i = 0; i < this._tvMeshes.length; i++) this._draw(this._tvMeshes[i], tg);
       for (let i = 0; i < this._remoteMeshes.length; i++) this._draw(this._remoteMeshes[i], rg);
 
       const ps = this._powerScreen();
@@ -575,7 +580,6 @@ void main(){
         ms_to_press: Math.round(performance.now() - this._shownAt)
       });
       this._btn.disabled = true;
-      this._hint.classList.add('hidden');
     }
 
     _handoff() {

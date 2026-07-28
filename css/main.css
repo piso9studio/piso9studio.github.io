@@ -401,11 +401,13 @@ piso9-intro {
   inset: 0;
   z-index: 50;
   background: var(--bg);
+  touch-action: pinch-zoom;
 }
 
 piso9-intro.fade {
   opacity: 0;
   transition: opacity 0.15s;
+  pointer-events: none;
 }
 
 piso9-intro canvas {
@@ -414,25 +416,6 @@ piso9-intro canvas {
   width: 100%;
   height: 100%;
   display: block;
-}
-
-.intro-hint {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 7vh;
-  margin: 0;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 24px;
-  letter-spacing: 0.08em;
-  color: var(--dim);
-  pointer-events: none;
-  transition: opacity 0.35s;
-}
-
-.intro-hint.hidden {
-  opacity: 0;
 }
 
 .intro-power-btn {

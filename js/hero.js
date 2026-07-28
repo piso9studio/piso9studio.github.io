@@ -1007,6 +1007,7 @@ void main(){
       const gl = this._gl;
       const dt = Math.min((now - this._tPrev) / 1000, 0.05);
       this._tPrev = now;
+      if (this._standby) return; // la intro tapa todo: no dibujar static invisible
       for (let i = 0; i < N; i++) {
         if (this._ages[i] < 1) this._ages[i] = Math.min(this._ages[i] + dt * 0.9, 1);
       }
