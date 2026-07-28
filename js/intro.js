@@ -64,7 +64,7 @@ void main(){
   gl_Position = uProj * uView * wp;
 }`;
 
-  // uMode: 0=pieza lit (Lambert+rim+fog), 1=pantalla (uLine→uStatic), 2=label
+  // uMode: 0=pieza lit (key+fill+specular+rim+fog), 1=pantalla (uLine→uStatic), 2=label, 3=fondo (glow radial)
   const FRAG = `
 precision highp float;
 varying vec3 vNrm, vPos, vLocal;
@@ -73,6 +73,13 @@ uniform float uMode, uLine, uStatic, uTime;
 uniform sampler2D uTexL;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 void main(){
+  if (uMode > 2.5) {
+    vec2 q = vLocal.xy;
+    float r = length(q * vec2(1.3, 1.0)) * 2.0;
+    vec3 bg = mix(vec3(0.075, 0.065, 0.055), vec3(0.028), smoothstep(0.15, 1.05, r));
+    gl_FragColor = vec4(bg, 1.0);
+    return;
+  }
   if (uMode > 1.5) {
     vec4 tc = texture2D(uTexL, vLocal.xy + 0.5);
     gl_FragColor = vec4(tc.rgb, tc.a);
@@ -92,13 +99,23 @@ void main(){
     return;
   }
   vec3 N = normalize(vNrm);
-  vec3 L = normalize(vec3(0.35, 0.8, 0.55));
   vec3 V = normalize(uEye - vPos);
-  float d = max(dot(N, L), 0.0);
+  // key cálida arriba-derecha-frente, fill fría tenue desde la izquierda
+  vec3 L1 = normalize(vec3(0.45, 0.75, 0.5));
+  vec3 L2 = normalize(vec3(-0.7, 0.15, 0.25));
+  float d1 = max(dot(N, L1), 0.0);
+  float d2 = max(dot(N, L2), 0.0);
+  vec3 H = normalize(L1 + V);
+  float spec = pow(max(dot(N, H), 0.0), 40.0);
   float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-  vec3 col = uColor * (0.22 + 0.78 * d) + vec3(0.5, 0.55, 0.6) * rim * 0.12 + uEmissive;
-  float fog = clamp((length(uEye - vPos) - 2.5) / 6.0, 0.0, 0.6);
-  col = mix(col, vec3(0.04), fog);
+  vec3 col = uColor * (0.16
+      + 0.85 * d1 * vec3(1.0, 0.93, 0.82)     // key cálida
+      + 0.30 * d2 * vec3(0.55, 0.65, 0.85))   // fill fría
+    + vec3(1.0, 0.95, 0.85) * spec * 0.18
+    + vec3(0.6, 0.65, 0.75) * rim * 0.22
+    + uEmissive;
+  float fog = clamp((length(uEye - vPos) - 2.8) / 6.0, 0.0, 0.55);
+  col = mix(col, vec3(0.035), fog);
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -146,9 +163,9 @@ void main(){
 
   const FOV = 0.87;
 
-  const REMOTE_POS = [0, -0.18, 1.05];
-  const REMOTE_POS_P = [0, -0.35, 1.15];
-  const REST_PITCH = -1.05, REST_YAW = 0.35;
+  const REMOTE_POS = [0, -0.22, 1.35];
+  const REMOTE_POS_P = [0, -0.39, 1.45];
+  const REST_PITCH = -1.05, REST_YAW = 0.35, REST_ROLL = -0.3;
   const TV_POS = [-0.55, 0.18, -1.6];   // arriba-izquierda (landscape)
   const TV_POS_P = [-0.12, 0.5, -2.0];  // portrait: más centrada y alta
   const TV_YAW = 0.55;                  // girada: lateral izquierdo hacia cámara;
@@ -424,6 +441,11 @@ void main(){
       }));
       this._tvMeshes = tv;
 
+      this._bgMesh = this._mesh(quad(), {
+        mode: 3,
+        local: M4.mul(M4.t([0, 0.1, -4.5]), M4.scl([14, 9, 1]))
+      });
+
       this._rot = { yaw: 0, pitch: 0 };
       this._dollyK = 0;
       this._powerAnim = { depress: 0, drop: 0 };
@@ -458,7 +480,7 @@ void main(){
       const pos = (this._portrait ? REMOTE_POS_P : REMOTE_POS).slice();
       pos[1] += Math.sin(t * 1.3) * 0.008 - this._powerAnim.drop;
       const wobble = Math.sin(t * 0.7) * 0.02;
-      return M4.trs(pos, REST_PITCH + this._rot.pitch, REST_YAW + this._rot.yaw + wobble, 0);
+      return M4.trs(pos, REST_PITCH + this._rot.pitch, REST_YAW + this._rot.yaw + wobble, REST_ROLL);
     }
 
     _tvGroup() {
@@ -533,6 +555,7 @@ void main(){
       gl.uniform1f(this._u.uTime, t);
       const rg = this._remoteGroup(t);
       const tg = this._tvGroup();
+      this._draw(this._bgMesh, null);
       for (let i = 0; i < this._tvMeshes.length; i++) this._draw(this._tvMeshes[i], tg);
       for (let i = 0; i < this._remoteMeshes.length; i++) this._draw(this._remoteMeshes[i], rg);
 
