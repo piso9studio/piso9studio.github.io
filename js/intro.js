@@ -497,16 +497,16 @@ void main(){
       // apoyar futuros objetos easter egg encima del mueble.
       this._shelfY = -0.585;
       const WOOD = [0.50, 0.27, 0.12], WOOD_DARK = [0.20, 0.10, 0.045], WOOD_LEG = [0.55, 0.32, 0.15];
-      tv.push(this._mesh(box(2.3, 0.04, 0.6), { color: WOOD, local: T([0, -0.605, 0]) }));
-      tv.push(this._mesh(box(2.2, 0.34, 0.55), { color: WOOD_DARK, local: T([0, -0.795, 0]) }));
-      for (let i = 0; i < 26; i++) {
-        tv.push(this._mesh(box(0.048, 0.30, 0.02), {
+      tv.push(this._mesh(box(4.1, 0.05, 0.66), { color: WOOD, local: T([0, -0.61, 0]) }));
+      tv.push(this._mesh(box(4.0, 0.5, 0.6), { color: WOOD_DARK, local: T([0, -0.885, 0]) }));
+      for (let i = 0; i < 46; i++) {
+        tv.push(this._mesh(box(0.05, 0.44, 0.02), {
           color: WOOD,
-          local: T([-1.01 + i * (2.02 / 25), -0.795, 0.283])
+          local: T([-1.91 + i * (3.82 / 45), -0.885, 0.308])
         }));
       }
-      [[-0.95, -0.18], [-0.95, 0.18], [0.95, -0.18], [0.95, 0.18]].forEach(([lx, lz]) => {
-        tv.push(this._mesh(cylinder(0.02, 0.22, 10), { color: WOOD_LEG, local: T([lx, -1.075, lz]) }));
+      [[-1.85, -0.2], [-1.85, 0.2], [1.85, -0.2], [1.85, 0.2]].forEach(([lx, lz]) => {
+        tv.push(this._mesh(cylinder(0.022, 0.26, 10), { color: WOOD_LEG, local: T([lx, -1.265, lz]) }));
       });
       tv.push(this._mesh(cylinder(0.008, 0.7, 6), {
         color: [0.2, 0.2, 0.2], local: M4.mul(T([-0.18, 0.85, -0.1]), M4.rotZ(0.45))
