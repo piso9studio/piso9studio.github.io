@@ -77,6 +77,8 @@ Sobre la tapa vive el primer objeto easter egg: un potus en florero de vidrio
 tele. Click → **modo inspección**: el control se hunde fuera de cuadro, la
 escena se funde a oscuro (mesh mode 4 + uniform `uFade`) y la planta viene al
 frente, rotable en todos los ejes con drag; tap suelto o Escape la devuelve.
+**Solo desktop**: en mobile (`(pointer: coarse)` o <720px) el tap en la planta
+no hace nada — ahí quedan activas solo las features del control remoto.
 Evento PostHog `intro_plant_inspected`. El patrón (objeto en `_shelfY` +
 `_plantToggle`-style) es la plantilla para futuros objetos inspeccionables.
 

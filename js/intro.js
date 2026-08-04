@@ -951,14 +951,18 @@ void main(){
       if (!w || !h) return;
       const vp = M4.mul(M4.persp(FOV, w / h, 0.05, 20), M4.lookAt(this._cam.eye, this._cam.tgt, [0, 1, 0]));
       const g = this._remoteGroup((performance.now() - this._t0) / 1000);
-      // primero la planta (grupo tv): click → modo inspección
-      const tg = this._tvGroup();
-      const pcL = [this._plantPos[0], this._plantPos[1] + 0.28, this._plantPos[2]];
-      const pc = this._remotePointScreen(pcL, tg, vp);
-      if (pc) {
-        const pe = this._remotePointScreen([pcL[0] + 0.28, pcL[1], pcL[2]], tg, vp);
-        const pr = Math.max(pe ? Math.hypot(pe.x - pc.x, pe.y - pc.y) : 0, 26);
-        if (Math.hypot(px - pc.x, py - pc.y) < pr) { this._plantToggle(true); return; }
+      // primero la planta (grupo tv): click → modo inspección. Solo desktop:
+      // en mobile (táctil o <720px) quedan activas solo las features del control
+      const mobile = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || this.clientWidth < 720;
+      if (!mobile) {
+        const tg = this._tvGroup();
+        const pcL = [this._plantPos[0], this._plantPos[1] + 0.28, this._plantPos[2]];
+        const pc = this._remotePointScreen(pcL, tg, vp);
+        if (pc) {
+          const pe = this._remotePointScreen([pcL[0] + 0.28, pcL[1], pcL[2]], tg, vp);
+          const pr = Math.max(pe ? Math.hypot(pe.x - pc.x, pe.y - pc.y) : 0, 26);
+          if (Math.hypot(px - pc.x, py - pc.y) < pr) { this._plantToggle(true); return; }
+        }
       }
       let best = null;
       const consider = (pos, payload) => {
