@@ -1031,9 +1031,7 @@ void main(){
     }
 
     _handoff() {
-      window.dispatchEvent(new CustomEvent('p9:power-on', {
-        detail: { ch: this._pendingCh != null ? this._pendingCh : null }
-      }));
+      window.dispatchEvent(new Event('p9:power-on'));
       if (this._audio) this._audio.hissOff(0.5);
       this.classList.add('fade');
       setTimeout(() => {
