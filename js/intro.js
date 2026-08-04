@@ -246,11 +246,13 @@ void main(){
   // hoja de potus HD: grilla acorazonada con cuenco y caída de punta;
   // base en el origen, punta en +y, normales numéricas
   function leaf() {
-    const ROWS = 9, COLS = 7, P = [], I = [];
+    const ROWS = 13, COLS = 9, P = [], I = [];
     const wAt = (s) => 0.56 * Math.pow(Math.sin(Math.min(s * 1.05, 1) * Math.PI), 0.65) * (1 - 0.22 * s);
     const pt = (s, u) => {
       const w = wAt(s);
-      return [u * w, s, 0.22 * s * s + 0.10 * u * u * w - 0.05 * Math.abs(u) * (1 - s)];
+      return [u * w, s,
+        0.22 * s * s + 0.10 * u * u * w - 0.05 * Math.abs(u) * (1 - s)
+        - 0.028 * Math.sin(Math.PI * s) * (1 - Math.abs(u))]; // vena central
     };
     for (let r = 0; r < ROWS; r++) {
       const s = r / (ROWS - 1);
@@ -668,23 +670,29 @@ void main(){
       // la tapa del mueble. Meshes aparte (this._plantMeshes, locals relativos
       // a la base del florero): en _frame se dibuja en el estante o al frente
       // en modo inspección. this._plantPos = base, local al grupo tv.
-      this._plantPos = [-1.0, this._shelfY, 0.12];
+      this._plantPos = [-1.25, this._shelfY, 0.12];
       const pl = [];
       const AMBER = { color: [0.66, 0.20, 0.05], emissive: [0.10, 0.025, 0.004] };
-      // florero: perfil de damajuana (panza, hombro, cuello con labio), lathe 24 seg
+      // florero: perfil de damajuana (panza, hombro, cuello con labio), lathe 32 seg
       pl.push(this._mesh(lathe([
-        [0.055, 0], [0.098, 0.012], [0.113, 0.045], [0.106, 0.085],
-        [0.082, 0.12], [0.060, 0.155], [0.047, 0.195], [0.040, 0.235],
-        [0.036, 0.27], [0.035, 0.30], [0.038, 0.322], [0.040, 0.33]
-      ], 24), Object.assign({}, AMBER)));
-      const STEM = [0.32, 0.46, 0.15], LEAF = [0.13, 0.30, 0.09], LEAF2 = [0.30, 0.42, 0.14];
-      // tallos curvos: cadena de conos que se afinan, doblando de a poco;
+        [0.055, 0], [0.085, 0.008], [0.105, 0.025], [0.113, 0.05], [0.110, 0.075],
+        [0.098, 0.10], [0.082, 0.122], [0.068, 0.142], [0.056, 0.165], [0.047, 0.192],
+        [0.041, 0.22], [0.037, 0.25], [0.035, 0.28], [0.035, 0.305], [0.038, 0.322], [0.040, 0.33]
+      ], 32), Object.assign({}, AMBER)));
+      // línea de agua: anillo apenas proud, más oscuro, como en el vidrio real
+      pl.push(this._mesh(cylinder(0.0465, 0.010, 32), {
+        color: [0.42, 0.10, 0.02], emissive: [0.05, 0.01, 0], local: T([0, 0.20, 0])
+      }));
+      const STEM = [0.30, 0.44, 0.14], STEM2 = [0.42, 0.55, 0.20];
+      const LEAF = [0.13, 0.30, 0.09], LEAF2 = [0.30, 0.42, 0.14], LEAF3 = [0.095, 0.235, 0.07];
+      // tallos curvos: cadena de conos que se afinan y aclaran hacia la punta;
       // devuelve la matriz del extremo para colgar la hoja
       const addStem = (rz0, rx0, bz, bx, segs, segLen) => {
         let m = M4.mul(M4.mul(T([0, 0.315, 0]), M4.rotZ(rz0)), M4.rotX(rx0));
         for (let i = 0; i < segs; i++) {
-          pl.push(this._mesh(cone(0.007 * (1 - i * 0.09), 0.007 * (1 - (i + 1) * 0.09), segLen, 8), {
-            color: STEM, local: M4.mul(m, T([0, segLen / 2, 0]))
+          const k = i / Math.max(segs - 1, 1);
+          pl.push(this._mesh(cone(0.007 * (1 - i * 0.07), 0.007 * (1 - (i + 1) * 0.07), segLen, 8), {
+            color: lerp3(STEM, STEM2, k), local: M4.mul(m, T([0, segLen / 2, 0]))
           }));
           m = M4.mul(M4.mul(M4.mul(m, T([0, segLen, 0])), M4.rotZ(bz)), M4.rotX(bx));
         }
@@ -696,11 +704,14 @@ void main(){
         }));
       };
       addLeaf(addStem(0.50, 0.15, 0.10, -0.04, 5, 0.055), 0.35, -0.75, 0.13, LEAF);
-      addLeaf(addStem(-0.30, -0.30, -0.10, -0.05, 5, 0.060), -0.30, -0.80, 0.145, LEAF2);
+      addLeaf(addStem(-0.30, -0.30, -0.10, -0.05, 5, 0.060), -0.30, -0.80, 0.155, LEAF2);
       addLeaf(addStem(0.05, 0.30, 0.02, 0.10, 4, 0.050), 0.10, -1.00, 0.12, LEAF);
-      addLeaf(addStem(-0.85, 0.10, -0.14, 0.02, 5, 0.050), -0.50, -0.55, 0.135, LEAF2);
-      addLeaf(addStem(0.20, -0.45, 0.06, -0.12, 4, 0.045), 0.15, -1.05, 0.11, LEAF);
+      addLeaf(addStem(-0.85, 0.10, -0.14, 0.02, 5, 0.050), -0.50, -0.55, 0.14, LEAF2);
+      addLeaf(addStem(0.20, -0.45, 0.06, -0.12, 4, 0.045), 0.15, -1.05, 0.11, LEAF3);
       addLeaf(addStem(-0.55, -0.10, -0.16, -0.06, 6, 0.050), -0.70, -0.60, 0.125, LEAF2);
+      addLeaf(addStem(0.75, -0.10, 0.14, -0.06, 5, 0.048), 0.55, -0.85, 0.10, LEAF3);
+      // tallo largo que se descuelga por el borde del florero
+      addLeaf(addStem(-1.15, 0.05, -0.22, 0.04, 7, 0.055), -0.85, -0.35, 0.15, LEAF);
       this._plantMeshes = pl;
       // velo del modo inspección (mode 4: color plano + alpha uFade)
       this._fadeMesh = this._mesh(quad(), { mode: 4, blend: true, color: [0.012, 0.012, 0.015] });
