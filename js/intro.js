@@ -648,6 +648,22 @@ void main(){
         local: T([0.15, -1.392, 0.55])
       }));
 
+      // sillón mid-century al frente-derecha, mirando a la tele: patas de
+      // madera, cuerpo de tela, respaldo reclinado y apoyabrazos con tapa
+      const CH = M4.mul(T([1.9, -1.398, 2.2]), M4.rotY(-2.43));
+      const FABRIC = [0.34, 0.155, 0.085], FABRIC2 = [0.42, 0.20, 0.10];
+      const chPart = (geo, opts, m) => tv.push(this._mesh(geo, Object.assign(opts, { local: M4.mul(CH, m) })));
+      [[-0.36, -0.30], [-0.36, 0.30], [0.36, -0.30], [0.36, 0.30]].forEach(([lx, lz]) => {
+        chPart(cylinder(0.022, 0.22, 10), { color: WOOD_LEG }, T([lx, 0.11, lz]));
+      });
+      chPart(box(0.88, 0.16, 0.78), { color: FABRIC }, T([0, 0.30, 0]));
+      chPart(box(0.82, 0.11, 0.70), { color: FABRIC2 }, T([0, 0.435, 0.02]));
+      chPart(box(0.82, 0.52, 0.15), { color: FABRIC }, M4.mul(T([0, 0.66, -0.36]), M4.rotX(-0.18)));
+      chPart(box(0.13, 0.32, 0.72), { color: FABRIC }, T([-0.375, 0.44, 0]));
+      chPart(box(0.13, 0.32, 0.72), { color: FABRIC }, T([0.375, 0.44, 0]));
+      chPart(box(0.15, 0.03, 0.74), { color: WOOD }, T([-0.375, 0.615, 0]));
+      chPart(box(0.15, 0.03, 0.74), { color: WOOD }, T([0.375, 0.615, 0]));
+
       // planta easter egg: potus en florero de vidrio ámbar, a la izquierda de
       // la tapa del mueble. Meshes aparte (this._plantMeshes, locals relativos
       // a la base del florero): en _frame se dibuja en el estante o al frente

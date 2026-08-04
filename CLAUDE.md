@@ -83,8 +83,9 @@ Evento PostHog `intro_plant_inspected`. El patrón (objeto en `_shelfY` +
 La habitación entera vive en el grupo tv (comparte el yaw del mueble, así
 las juntas corren en diagonal con el escorzo): piso al ras de las patas,
 pared de fondo con glow anclado a la tele (mode 3, centrado vía `uSpot`),
-pared lateral derecha cerrando la esquina en x=3.4 local, zócalos y una
-alfombra frente al mueble que atrapa el charco del spot.
+pared lateral derecha cerrando la esquina en x=3.4 local, zócalos, una
+alfombra frente al mueble que atrapa el charco del spot, y un sillón
+mid-century al frente-derecha mirando a la tele.
 
 ## Reglas de performance
 
