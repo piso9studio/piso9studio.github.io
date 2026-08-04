@@ -45,7 +45,9 @@ Las 4 fuentes críticas van con `<link rel="preload" as="font" crossorigin>` en 
 
 `<piso9-hero>` ES la página: modo TV-only (clase `p9-tv` en `<html>`, seteada por un script inline en el `<head>`; las secciones DOM de abajo quedan sr-only como fallback SEO/no-JS). Todo se dibuja en dos texturas canvas 2D subidas a WebGL; los controles reales (buttons/links invisibles) se posicionan encima con el mapeo inverso del barrel distortion (`_screenPos`, `k=0.22` debe seguir igual al `0.10*2.2` del shader).
 
-**Canales**: CH 9 home (wordmark + tagline/copy + CTAs), CH 1 hub de proyectos (mini galería con cards clickeables), CH 2..N+1 un canal por proyecto, CH 0 contacto (botón mailto). Se navega con las cajitas ▲/▼ + botón MENU abajo a la derecha (paths — el subset latin de VT323 no tiene ▲▼↗; en home llevan hint "SCROLL / ARROW KEYS"), rueda del mouse, swipe vertical táctil, teclado (ArrowUp/Down), o los links/CTAs del nav (oculto en home; logo PISO9 Orbitron en los demás). El cambio de canal reproduce un burst de static (~400ms, uniform `uSwitch`); el contenido se intercambia en el pico del ruido. Deep-links: `#ch0`/`#ch2`/`#ch9` (+ alias `#work` → hub, `#contact`).
+**Canales**: CH 9 home (wordmark + tagline/copy + CTAs), CH 1 hub de proyectos (mini galería con cards clickeables), CH 2..N+1 un canal por proyecto, CH 0 contacto (botón mailto). Se navega con las cajitas ▲/▼ + botón MENU abajo a la derecha (paths — el subset latin de VT323 no tiene ▲▼↗; en home llevan hint "SCROLL / ARROW KEYS", o el hint touch si `(pointer: coarse)`), rueda del mouse, drag táctil con **vertical roll** (el contenido sigue el dedo vía uniform `uDragY`, static en la banda que entra; soltar pasado ~15% del alto o con flick conmuta, si no spring de vuelta; un drag >10px suprime el click de los overlays), teclado (ArrowUp/Down), o los links/CTAs del nav (oculto en home; logo PISO9 Orbitron en los demás). El cambio de canal reproduce un burst de static (~400ms, uniform `uSwitch`); el contenido se intercambia en el pico del ruido. Deep-links: `#ch0`/`#ch2`/`#ch9` (+ alias `#work` → hub, `#contact`).
+
+**Sonidos**: cues de UI sintetizados con Web Audio en `hero.js` (`makeSfx`: sintonía al cambiar de canal, tick en botones, pop del menú, confirm de idioma), lazy y muteables desde el menú OSD (fila SOUND, persiste en `localStorage['p9-sound']`; `intro.js` respeta la misma key).
 
 **i18n**: todo el wording vive en dos JSON inline en `index.html` (`#p9-i18n-en` y `#p9-i18n-es`, cada uno con `ui` + `projects`). Default = idioma del navegador (es→ES, resto EN); la última selección persiste en `localStorage['p9-lang']` y se cambia desde el menú OSD (botón MENU → AJUSTES/SETTINGS → EN/ES). La capa UI del shader se compone con alpha (no aditiva) para que el panel del menú pueda tapar contenido.
 
@@ -57,6 +59,12 @@ evento `p9:power-on`, con el que el hero (en standby, `uBoot` congelado) corre
 su boot. Solo aparece sin deep-link, con motion y con WebGL (clase `p9-intro`
 del script inline del head); ante cualquier error hace `_bail()` y la página
 carga normal. Sonido sintetizado con Web Audio, cero assets.
+
+Easter egg: el keypad 3×3 del control (dígitos 1-9) beepea DTMF, se hunde y
+titila el LED IR; el último dígito pre-sintoniza el canal al prender
+(`p9:power-on` es CustomEvent con `detail.ch`; `_bail()` sigue despachando
+`Event` pelado). El d-pad sacude el control. Hit-testing por proyección de
+centros (misma matemática que `_powerScreen`), solo en taps <6px de drag.
 
 ## Reglas de performance
 
