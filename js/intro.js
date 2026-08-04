@@ -981,8 +981,6 @@ void main(){
       if (best.payload.key) {
         const k = best.payload.key._key;
         k.t0 = performance.now();
-        this._pendingCh = k.digit;
-        this._keyPresses = (this._keyPresses || 0) + 1;
         this._irT0 = performance.now();
         if (audio) audio.beep(k.row, k.col);
       } else {
@@ -1023,9 +1021,7 @@ void main(){
       if (audio) audio.click();
       if (window.posthog) posthog.capture('intro_power_on', {
         lang: this._lang,
-        ms_to_press: Math.round(performance.now() - this._shownAt),
-        ch: this._pendingCh != null ? this._pendingCh : null,
-        keypad_presses: this._keyPresses || 0
+        ms_to_press: Math.round(performance.now() - this._shownAt)
       });
       this._btn.disabled = true;
     }

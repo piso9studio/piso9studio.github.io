@@ -384,8 +384,9 @@ void main(){
       this._onKey = (e) => {
         if (this._standby) return;
         if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-        if (e.key === 'ArrowUp') { e.preventDefault(); this.switchChannel(this._chIndex + 1); }
-        else if (e.key === 'ArrowDown') { e.preventDefault(); this.switchChannel(this._chIndex - 1); }
+        // flechas en clave scroll (como rueda y swipe): abajo = avanzar
+        if (e.key === 'ArrowDown') { e.preventDefault(); this.switchChannel(this._chIndex + 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); this.switchChannel(this._chIndex - 1); }
         else if (e.key === 'Escape' && this._menuOpen) { this._menuOpen = false; this._sfx('popDown'); this._drawChannel(); }
       };
       window.addEventListener('keydown', this._onKey);
