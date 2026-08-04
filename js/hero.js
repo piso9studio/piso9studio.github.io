@@ -156,7 +156,8 @@ void main(){
           return ctx.state === 'running';
         },
         tick() { tone(1800, 1400, 0.03, 0.10, 'square'); },
-        tune() { tone(220, 880, 0.09, 0.06, 'square'); noise(0.12, 'highpass', 3500, 0.10); },
+        // mini-thunk: el mismo golpe grave de prender la tele (intro.js), en corto
+        tune() { tone(130, 45, 0.1, 0.5, 'sine'); noise(0.1, 'lowpass', 500, 0.2); },
         pop() { tone(500, 900, 0.06, 0.09, 'triangle'); },
         popDown() { tone(900, 500, 0.06, 0.09, 'triangle'); },
         confirm() { tone(700, 700, 0.05, 0.07, 'square'); setTimeout(() => tone(1050, 1050, 0.06, 0.07, 'square'), 70); }
