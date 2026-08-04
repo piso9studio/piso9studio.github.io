@@ -1,10 +1,3 @@
-/* <piso9-hero> — fullscreen WebGL TV: the whole page lives inside the tube.
-   Channels: CH 9 home, CH 1 work hub (mini gallery), CH 2..N+1 projects,
-   CH 0 contact. Wording comes from the #p9-i18n-en / #p9-i18n-es JSON blocks
-   in index.html; language defaults to the browser's, persists in localStorage
-   ('p9-lang') and can be switched from the OSD settings menu (MENU button).
-   Switching channels replays the boot static burst (uniform uSwitch).
-   Attributes: accent (hex), strength (float), grain ("on"|"off"), crt. */
 (function () {
   if (customElements.get('piso9-hero')) return;
 
@@ -35,12 +28,9 @@ float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 
 void main(){
   vec2 uv = vUv;
-  // subtle CRT barrel distortion — 0.10*2.2 must match k=0.22 in _screenPos
   vec2 cc = uv - 0.5;
   uv = 0.5 + cc * (1.0 + uCrt * 0.10 * dot(cc, cc) * 2.2);
   float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
-  // vertical roll (drag táctil): la imagen se desplaza, el tubo queda fijo;
-  // la banda fuera de rango se rellena de static más abajo
   float sy = uv.y + uDragY;
   float inBand = step(0.0, sy) * step(sy, 1.0);
   vec2 suv = vec2(uv.x, sy);
@@ -68,8 +58,6 @@ void main(){
   col.g = texture2D(uTex, suv - disp).g;
   col.b = texture2D(uTex, suv - disp + ca).b;
 
-  // UI layer: takes the tube shape but not the mouse distortion.
-  // Alpha-composited (not additive) so opaque OSD panels can cover content.
   vec4 uiC = texture2D(uTexUI, suv);
   col = mix(col, uiC.rgb, uiC.a);
   vec2 m = uv - uMouse; m.x *= aspect;
@@ -79,14 +67,11 @@ void main(){
   vec2 q = uv - 0.5;
   col *= 1.0 - dot(q,q)*0.55;
 
-  // static: boot plays it once at load, dissolving into the content;
-  // channel-switch bursts reuse the same noise
   float stat = max(1.0 - smoothstep(1.2, 1.8, uBoot), uSwitch);
   stat = max(stat, max(1.0 - inBand, min(abs(uDragY) * 0.8, 0.3)));
   float n1 = hash(floor(uv*uRes*0.5) + vec2(fract(uTime*11.3)*291.0, fract(uTime*7.7)*173.0));
   col = mix(col, vec3(n1*n1*0.85), stat);
 
-  // CRT: scanlines + slow flicker + faint phosphor stripes
   float scan = 1.0 - uCrt * 0.10 * (0.5 + 0.5 * sin(uv.y * uRes.y * 1.7));
   float flick = 1.0 - uCrt * 0.012 * sin(uTime * 47.0);
   col *= scan * flick;
@@ -100,23 +85,18 @@ void main(){
 }`;
 
   const N = 16;
-  const SWITCH_S = 0.4; // channel-switch static burst duration (s)
+  const SWITCH_S = 0.4;
   const STACK = '"Satoshi", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
   const MONO = '"VT323", ui-monospace, Menlo, Consolas, monospace';
   const sstep = (a, b, t) => {
     const k = Math.min(Math.max((t - a) / (b - a), 0), 1);
     return k * k * (3 - 2 * k);
   };
-  // set font + letterSpacing (px) in one go; letterSpacing lacks old-Safari support
   const setF = (x, font, lsp) => {
     x.font = font;
     try { x.letterSpacing = (lsp || 0) + 'px'; } catch (e) { }
   };
 
-  // UI sfx — cues sintetizados estilo intro.js/makeAudio: cortos (<150ms),
-  // volumen bajo, cero assets. El AudioContext se crea lazy en el primer
-  // gesto con user activation; si quedó suspended (p. ej. wheel), el cue
-  // se saltea en silencio hasta el próximo click/tecla.
   const makeSfx = () => {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
@@ -156,7 +136,6 @@ void main(){
           return ctx.state === 'running';
         },
         tick() { tone(1800, 1400, 0.03, 0.10, 'square'); },
-        // mini-thunk: el mismo golpe grave de prender la tele (intro.js), en corto
         tune() { tone(130, 45, 0.1, 0.5, 'sine'); noise(0.1, 'lowpass', 500, 0.2); },
         pop() { tone(500, 900, 0.06, 0.09, 'triangle'); },
         popDown() { tone(900, 500, 0.06, 0.09, 'triangle'); },
@@ -182,7 +161,6 @@ void main(){
       this._canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block';
       this.appendChild(this._canvas);
 
-      // i18n dictionaries (ui strings + projects) from inline JSON blocks
       this._dicts = {};
       ['en', 'es'].forEach(l => {
         try {
@@ -198,7 +176,7 @@ void main(){
       this._lang = this._dicts[lang] ? lang : Object.keys(this._dicts)[0] || 'en';
       document.documentElement.lang = this._lang;
 
-      this._imgs = Object.create(null); // screenshot cache, keyed by src
+      this._imgs = Object.create(null);
       this._menuOpen = false;
       this._buildChannels();
       this._chIndex = this._initialIndex();
@@ -207,7 +185,6 @@ void main(){
       this._swapped = true;
       this._lastNav = 0;
 
-      // invisible hit targets that track the barrel-mapped positions of drawn UI
       const mkOverlay = (tag, label, href) => {
         const el = document.createElement(tag);
         if (href) el.href = href;
@@ -232,10 +209,10 @@ void main(){
         mailto: mkOverlay('a', 'email hello@piso9.studio', 'mailto:hello@piso9.studio'),
         soundOn: mkOverlay('button', 'sound on'),
         soundOff: mkOverlay('button', 'sound off'),
-        panel: mkOverlay('div', '') // absorbs clicks inside the open OSD panel
+        panel: mkOverlay('div', '')
       };
       this._overlays.panel.style.cursor = 'default';
-      this._overlays.panel.style.zIndex = '4'; // below the EN/ES buttons it contains
+      this._overlays.panel.style.zIndex = '4';
       const projCount = ((this._dicts[this._lang] || {}).projects || []).length;
       for (let i = 0; i < projCount; i++) {
         const el = this._overlays['proj' + i] = mkOverlay('button', 'project — channel ' + (i + 2));
@@ -244,8 +221,6 @@ void main(){
           this.switchChannel(this._channels.findIndex(c => c.type === 'project' && c.pi === i));
         });
       }
-      // tick sutil al presionar cualquier control clickeable (solo mouse/pen:
-      // en touch el pointerdown también inicia swipes y sería ruido)
       for (const key in this._overlays) {
         if (key === 'panel' || key === 'menu') continue;
         this._overlays[key].addEventListener('pointerdown', (e) => {
@@ -299,7 +274,6 @@ void main(){
       this._overlays.soundOn.addEventListener('click', (e) => { e.preventDefault(); this._setSound(true); });
       this._overlays.soundOff.addEventListener('click', (e) => { e.preventDefault(); this._setSound(false); });
 
-      // screen-reader announcement of the active channel
       this._live = document.createElement('div');
       this._live.setAttribute('aria-live', 'polite');
       this._live.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap';
@@ -384,14 +358,12 @@ void main(){
       this._onKey = (e) => {
         if (this._standby) return;
         if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-        // flechas en clave scroll (como rueda y swipe): abajo = avanzar
         if (e.key === 'ArrowDown') { e.preventDefault(); this.switchChannel(this._chIndex + 1); }
         else if (e.key === 'ArrowUp') { e.preventDefault(); this.switchChannel(this._chIndex - 1); }
         else if (e.key === 'Escape' && this._menuOpen) { this._menuOpen = false; this._sfx('popDown'); this._drawChannel(); }
       };
       window.addEventListener('keydown', this._onKey);
 
-      // click outside the OSD panel closes it
       this._onDocDown = (e) => {
         if (!this._menuOpen) return;
         const o = this._overlays;
@@ -403,8 +375,6 @@ void main(){
       };
       document.addEventListener('pointerdown', this._onDocDown);
 
-      // wheel + vertical touch swipe also change channels (with a cooldown so
-      // trackpad inertia doesn't skip several channels per flick)
       this._onWheel = (e) => {
         e.preventDefault();
         if (performance.now() - this._lastNav < 700) { this._wAcc = 0; return; }
@@ -415,9 +385,6 @@ void main(){
         }
       };
       this.addEventListener('wheel', this._onWheel, { passive: false });
-      // touch: el canal sigue el dedo (vertical roll de tele vieja). Al soltar,
-      // conmuta si superó ~15% del alto o fue un flick rápido; si no, spring a 0.
-      // Cualquier drag >10px suprime el click de los overlays (fase captura).
       this._rollY = 0;
       this._rollAnim = null;
       this._suppressClick = false;
@@ -430,12 +397,12 @@ void main(){
         const d = this._tDrag;
         if (!d || e.pointerType !== 'touch') return;
         const now = performance.now();
-        d.v = 0.8 * d.v + 0.2 * ((e.clientY - d.y) / Math.max(now - d.t, 1)); // px/ms suavizado
+        d.v = 0.8 * d.v + 0.2 * ((e.clientY - d.y) / Math.max(now - d.t, 1));
         d.y = e.clientY; d.t = now;
         if (Math.abs(e.clientY - d.y0) > 10) d.moved = true;
         const h = Math.max(this.clientHeight, 1);
         let f = (e.clientY - d.y0) / h;
-        const lim = 0.4; // rubber-band pasando ±40%
+        const lim = 0.4;
         if (Math.abs(f) > lim) f = Math.sign(f) * (lim + (Math.abs(f) - lim) * 0.35);
         if (!this._reduced && this._switchT0 < 0) this._rollY = f;
       };
@@ -449,16 +416,13 @@ void main(){
         }
         const h = Math.max(this.clientHeight, 1);
         const f = (e.clientY - d.y0) / h;
-        // v solo cuenta como flick si el último move fue reciente: arrastrar
-        // rápido y sostener el dedo quieto no debe conmutar al soltar
         const v = performance.now() - d.t < 100 ? d.v : 0;
         if (Math.abs(f) > 0.15 || Math.abs(v) > 0.5) {
-          this.switchChannel(this._chIndex + (f < 0 ? 1 : -1)); // arriba = siguiente
+          this.switchChannel(this._chIndex + (f < 0 ? 1 : -1));
         }
         this._rollAnim = { from: this._rollY, t0: performance.now() };
       };
       this._onPCancel = () => {
-        // cancel (p. ej. el browser se queda el gesto): sin commit, solo spring
         if (!this._tDrag) return;
         this._tDrag = null;
         this._rollAnim = { from: this._rollY, t0: performance.now() };
@@ -476,7 +440,6 @@ void main(){
       this._ro.observe(this);
       this._resize();
 
-      // redraw once the webfonts (Orbitron / VT323 / Satoshi) arrive
       if (document.fonts) {
         Promise.all([
           document.fonts.load('700 100px "Orbitron"'),
@@ -487,10 +450,6 @@ void main(){
       }
 
       this._t0 = performance.now();
-      // Standby: si la intro (js/intro.js) está activa, quedarse en static puro
-      // (uBoot congelado en 0) hasta que despache p9:power-on; ahí recién corre
-      // el boot. El static de acá y el del final de la intro son el mismo ruido,
-      // así que el empalme no se ve.
       this._standby = document.documentElement.classList.contains('p9-intro');
       if (this._standby) {
         this._onPowerOn = () => {
@@ -534,12 +493,10 @@ void main(){
     get strengthVal() { const v = parseFloat(this.getAttribute('strength')); return isNaN(v) ? 1 : v; }
     get grainVal() { return this.getAttribute('grain') === 'off' ? 0 : 1; }
     get crtVal() {
-      // TV effect off on small screens — the barrel + scanlines don't read well on mobile
       if (this.clientWidth < 720) return 0;
       return this.getAttribute('crt') === 'off' ? 0 : 1;
     }
 
-    // --- i18n / channels ----------------------------------------------------
 
     _dict() { return this._dicts[this._lang] || { ui: {}, projects: [] }; }
 
@@ -581,7 +538,7 @@ void main(){
 
     _setSound(on) {
       try { localStorage.setItem('p9-sound', on ? 'on' : 'off'); } catch (e) { }
-      if (on) this._sfx('confirm'); // feedback audible solo al prender
+      if (on) this._sfx('confirm');
       this._drawChannel();
     }
 
@@ -606,7 +563,6 @@ void main(){
       idx = ((idx % n) + n) % n;
       if (idx === this._chIndex && this._swapped) return;
       if (this._switchT0 >= 0 && performance.now() - this._switchT0 < SWITCH_S * 1000 + 50) return;
-      // prefetch the target's screenshots and its neighbors'
       [idx, idx - 1, idx + 1].forEach(i => {
         const c = this._channels[((i % n) + n) % n];
         if (c.type === 'project') this._loadImage(c.data);
@@ -649,7 +605,7 @@ void main(){
       const src = p && p.img;
       if (!src || this._imgs[src]) return;
       const img = new Image();
-      this._imgs[src] = img; // also serves as the in-flight marker
+      this._imgs[src] = img;
       img.decoding = 'async';
       img.src = src;
       const done = () => {
@@ -681,7 +637,6 @@ void main(){
 
     _wrap(x, text, maxW) {
       const lines = [];
-      // honor explicit newlines (\n) as forced breaks, then word-wrap each segment
       for (const para of String(text).split('\n')) {
         let cur = '';
         for (const wd of para.split(' ')) {
@@ -694,7 +649,6 @@ void main(){
       return lines;
     }
 
-    // screenshot box for a project channel, aspect-fitted from JSON dimensions
     _projectImgRect(p, w, h, dpr, narrow) {
       const bx = narrow ? 36 * dpr : w * 0.53;
       const by = narrow ? h * 0.14 : h * 0.22;
@@ -705,7 +659,6 @@ void main(){
       return [bx + (bw - iw * s) / 2, by + (bh - ih * s) / 2, iw * s, ih * s];
     }
 
-    // thumbnail boxes for the work hub gallery
     _hubCards(n, w, h, dpr, narrow) {
       if (narrow) {
         const cw = w - 72 * dpr;
@@ -717,12 +670,10 @@ void main(){
       return Array.from({ length: n }, (_, i) => [x0 + i * (cw + gap), h * 0.4, cw, chh]);
     }
 
-    // boxed ▲/▼ + MENU controls, bottom-right; returns their hit rects
     _drawControls(x, w, h, dpr, ui, hint) {
       const bs = 26 * dpr, gap = 8 * dpr, pad = 36 * dpr;
       const bx = w - pad - bs;
       const line = Math.max(1, Math.round(dpr));
-      // MENU pill at the very bottom, arrows stacked above it
       setF(x, '400 ' + (13 * dpr) + 'px ' + MONO, 0.08 * 13 * dpr);
       const mTxt = ui.menu || 'MENU';
       const mTw = x.measureText(mTxt).width;
@@ -768,7 +719,6 @@ void main(){
       this._drawUI(ch);
     }
 
-    // content layer (uTex): gets the mouse-trail distortion + chromatic aberration
     _drawTex(ch) {
       const gl = this._gl;
       const w = this._canvas.width, h = this._canvas.height;
@@ -798,7 +748,7 @@ void main(){
         x.fillStyle = this.accent;
         x.fillText('9', x0 + wPiso, y0);
         x.textBaseline = 'alphabetic';
-        this._wmBottom = y0 + size * 0.40; // for the tagline/copy drawn in _drawUI
+        this._wmBottom = y0 + size * 0.40;
       } else if (ch.type === 'work') {
         const ps = this._dict().projects || [];
         const boxes = this._hubCards(ps.length, w, h, dpr, narrow);
@@ -806,7 +756,6 @@ void main(){
           const [bx, by, bw, bh] = boxes[i];
           const im = this._imgs[p.img];
           if (im && im._ok) {
-            // cover-crop, top-aligned (same crop bias as the DOM embed poster)
             const iw = p.imgW || im.naturalWidth, ih = p.imgH || im.naturalHeight;
             const s = Math.max(bw / iw, bh / ih);
             x.drawImage(im, (iw - bw / s) / 2, 0, bw / s, bh / s, bx, by, bw, bh);
@@ -845,9 +794,6 @@ void main(){
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
     }
 
-    // UI layer (uTexUI): drawn into its own texture — gets the tube shape
-    // (barrel, scanlines, vignette) but is never displaced by the mouse trail.
-    // Transparent background: alpha-composited over the content layer.
     _drawUI(ch) {
       const gl = this._gl;
       const w = this._canvas.width, h = this._canvas.height;
@@ -862,7 +808,6 @@ void main(){
       const padX = 36 * dpr;
       const rects = {};
 
-      // nav — hidden on home; PISO9 wordmark as logo, roomier vertical padding
       if (ch.type !== 'home') {
         x.textBaseline = 'top';
         const navY = 44 * dpr;
@@ -890,7 +835,6 @@ void main(){
       }
 
       if (ch.type === 'home') {
-        // tagline + copy under the wordmark, like a standard hero
         let cy = (this._wmBottom || h * 0.55) + 44 * dpr;
         x.textBaseline = 'alphabetic';
         if (ui.tagline) {
@@ -909,7 +853,6 @@ void main(){
           }
         }
 
-        // CTA row — 00s TV OSD-style bracketed menu items (primary + secondary)
         const ctaTxt = ui.ctaWork || '[ SEE OUR WORK ]';
         const cta2Txt = ui.ctaContact || '[ CONTACT US ]';
         setF(x, '400 ' + (19 * dpr) + 'px ' + MONO, 0.1 * 19 * dpr);
@@ -937,7 +880,6 @@ void main(){
         }
         x.textBaseline = 'alphabetic';
       } else if (ch.type === 'work') {
-        // hub: mini title + gallery of project cards, each jumping to its channel
         const ps = this._dict().projects || [];
         const boxes = this._hubCards(ps.length, w, h, dpr, narrow);
         x.textBaseline = 'top';
@@ -1039,7 +981,6 @@ void main(){
         t = ui.contactCopy || '';
         x.fillText(t, (w - x.measureText(t).width) / 2, ty + tSize * 1.6);
 
-        // mailto CTA button + the address itself in small type below it
         const bTxt = ui.contactCta || '[ CONTACT US ]';
         setF(x, '400 ' + (21 * dpr) + 'px ' + MONO, 0.1 * 21 * dpr);
         x.fillStyle = this.accent;
@@ -1059,10 +1000,8 @@ void main(){
         rects.mailto = [(w - mW) / 2, bY - 6 * dpr, mW, eY + 20 * dpr - bY];
       }
 
-      // channel controls (▲/▼ + MENU), bottom-right
       Object.assign(rects, this._drawControls(x, w, h, dpr, ui, ch.type === 'home'));
 
-      // OSD settings panel, above the controls
       if (this._menuOpen) {
         const pad = 36 * dpr;
         const pw = 210 * dpr, ph = 100 * dpr;
@@ -1085,7 +1024,7 @@ void main(){
         const esW = x.measureText('ES').width;
         const enW = x.measureText('EN').width;
         const esX = pxl + pw - 14 * dpr - esW;
-        const enX = esX - 26 * dpr - enW; // wide gap: the hitboxes must never overlap
+        const enX = esX - 26 * dpr - enW;
         const oy = pt + 38 * dpr;
         x.fillStyle = this._lang === 'en' ? this.accent : '#808080';
         x.fillText('EN', enX, oy);
@@ -1101,7 +1040,7 @@ void main(){
         const offW = x.measureText(offTxt).width;
         const onW = x.measureText(onTxt).width;
         const offX = pxl + pw - 14 * dpr - offW;
-        const onX = offX - 26 * dpr - onW; // gap ancho: hitboxes sin solaparse
+        const onX = offX - 26 * dpr - onW;
         const oy2 = pt + 66 * dpr;
         const snd = this._soundOn();
         x.fillStyle = snd ? this.accent : '#808080';
@@ -1114,7 +1053,6 @@ void main(){
         x.textBaseline = 'alphabetic';
       }
 
-      // channel indicator, bottom-left
       const pad = 36 * dpr;
       x.textBaseline = 'alphabetic';
       setF(x, '600 ' + (13 * dpr) + 'px ' + STACK, 0.18 * 13 * dpr);
@@ -1131,10 +1069,9 @@ void main(){
       gl.activeTexture(gl.TEXTURE0);
     }
 
-    // texture px -> screen CSS px through the inverse of the shader's barrel map
     _screenPos(px, py) {
       const w = this._canvas.width, h = this._canvas.height;
-      const k = 0.22 * this.crtVal; // must match the shader's 0.10*2.2 barrel factor
+      const k = 0.22 * this.crtVal;
       const ux = px / w, uy = 1 - py / h;
       let sx = ux, sy = uy;
       for (let i = 0; i < 4; i++) {
@@ -1170,11 +1107,10 @@ void main(){
       const gl = this._gl;
       const dt = Math.min((now - this._tPrev) / 1000, 0.05);
       this._tPrev = now;
-      if (this._standby) return; // la intro tapa todo: no dibujar static invisible
+      if (this._standby) return;
       for (let i = 0; i < N; i++) {
         if (this._ages[i] < 1) this._ages[i] = Math.min(this._ages[i] + dt * 0.9, 1);
       }
-      // channel-switch static burst: envelope on CPU, swap content at the peak
       let sw = 0;
       if (this._switchT0 >= 0) {
         const ts = (now - this._switchT0) / 1000;
@@ -1209,7 +1145,6 @@ void main(){
     }
 
     _fallback() {
-      // no WebGL: restore the plain scrollable page hidden by the tv-only class
       document.documentElement.classList.remove('p9-tv');
       this.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 14vw ui-sans-serif,system-ui,sans-serif;letter-spacing:-0.03em;color:#fafafa">PISO<span style="color:' + this.accent + '">9</span></div>';
     }

@@ -1,11 +1,5 @@
-/* ==========================================================================
-   Piso9 Studio — main stylesheet
-   Palette and type roles are documented in CLAUDE.md.
-   ========================================================================== */
 
-/* --- Fonts (self-hosted, woff2 only) ------------------------------------- */
 
-/* Orbitron — wordmark & headings. Only 700 is used. (OFL, via Google Fonts) */
 @font-face {
   font-family: 'Orbitron';
   font-style: normal;
@@ -15,7 +9,6 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* VT323 — terminal/OSD accents (hero CTA, embed button). (OFL) */
 @font-face {
   font-family: 'VT323';
   font-style: normal;
@@ -25,7 +18,6 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Satoshi — UI & body. (Fontshare ITF FFL) */
 @font-face {
   font-family: 'Satoshi';
   font-style: normal;
@@ -48,14 +40,13 @@
   src: url("../fonts/satoshi-700.woff2") format('woff2');
 }
 
-/* --- Base ----------------------------------------------------------------- */
 
 :root {
   --bg: #0a0a0a;
   --fg: #fafafa;
   --accent: #ff8c00;
   --muted: #a3a3a3;
-  --dim: #808080; /* AA 4.5:1 sobre --bg y --card; el diseño original usaba #737373 */
+  --dim: #808080; 
   --line: #262626;
   --card: #141414;
   --font-sans: "Satoshi", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -67,11 +58,6 @@ html {
   scroll-behavior: smooth;
 }
 
-/* --- TV-only mode ----------------------------------------------------------
-   Set on <html> by an inline script before first paint; removed by hero.js
-   when WebGL is unavailable. The page becomes just the TV (100vh, no scroll);
-   the sections below stay in the DOM as sr-only fallback (screen readers and
-   crawlers keep them — display:none would drop them from the a11y tree). */
 .p9-tv,
 .p9-tv body {
   height: 100%;
@@ -112,7 +98,6 @@ a:hover {
   color: var(--bg);
 }
 
-/* --- Hero ------------------------------------------------------------------ */
 
 .hero {
   position: relative;
@@ -126,7 +111,6 @@ piso9-hero {
   inset: 0;
 }
 
-/* Static wordmark shown only when JS is disabled (inside <noscript>). */
 .hero-fallback {
   position: absolute;
   inset: 0;
@@ -142,7 +126,6 @@ piso9-hero {
   color: var(--accent);
 }
 
-/* --- Sections ---------------------------------------------------------------- */
 
 .section {
   max-width: 960px;
@@ -182,7 +165,6 @@ piso9-hero {
   margin-bottom: 24px;
 }
 
-/* --- Work / project cards ------------------------------------------------------ */
 
 .project {
   display: flex;
@@ -240,7 +222,6 @@ piso9-hero {
   color: var(--dim);
 }
 
-/* Browser-chrome card around embeds/screenshots */
 .browser-card {
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -288,7 +269,6 @@ piso9-hero {
   border: 0;
 }
 
-/* Click-to-load facade for live embeds (js/main.js swaps in the iframe) */
 .embed {
   position: relative;
   height: 560px;
@@ -330,7 +310,6 @@ piso9-hero {
   border-color: var(--accent);
 }
 
-/* --- Contact ------------------------------------------------------------------- */
 
 .contact-title {
   margin: 0 0 32px;
@@ -362,7 +341,6 @@ piso9-hero {
   padding-bottom: 6px;
 }
 
-/* --- Footer ---------------------------------------------------------------------- */
 
 .site-footer {
   max-width: 960px;
@@ -387,9 +365,6 @@ piso9-hero {
   color: var(--accent);
 }
 
-/* --- Intro: control remoto → tele ------------------------------------------
-   <piso9-intro> tapa el hero hasta que el usuario aprieta power (js/intro.js).
-   Solo existe bajo html.p9-intro; el propio intro.js saca la clase al terminar. */
 
 piso9-intro {
   display: none;

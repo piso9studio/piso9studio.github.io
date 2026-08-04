@@ -11,7 +11,6 @@
   <link rel="canonical" href="https://piso9.studio/">
   <meta name="theme-color" content="#0a0a0a">
 
-  <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Piso9 Studio">
   <meta property="og:title" content="Piso9 Studio — A software studio">
@@ -22,31 +21,23 @@
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
 
-  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Piso9 Studio — A software studio">
   <meta name="twitter:description"
     content="We design and build products end to end — from idea to launch.">
   <meta name="twitter:image" content="https://piso9.studio/assets/og.png">
 
-  <!-- Icons -->
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon.ico" sizes="32x32">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 
-  <!-- Fonts: all four faces are drawn in the hero canvas on first paint -->
   <link rel="preload" href="/fonts/orbitron-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/satoshi-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/satoshi-500.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/vt323-latin.woff2" as="font" type="font/woff2" crossorigin>
 
-  <!-- TV-only mode: hides the fallback sections below the hero before first paint.
-       Removed by hero.js if WebGL is unavailable; never added without JS. -->
   <script>
     document.documentElement.classList.add('p9-tv');
-    // Intro control remoto → tele: solo en la home "limpia" (sin deep-link) y
-    // con motion habilitado. Si intro.js no puede arrancar (sin WebGL, error),
-    // él mismo saca la clase y despacha p9:power-on (ver _bail en intro.js).
     if (!/^#(ch\d+|work|contact)$/.test(location.hash) &&
       !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
       document.documentElement.classList.add('p9-intro');
@@ -195,8 +186,6 @@
     <a href="mailto:hello@piso9.studio">HELLO@PISO9.STUDIO</a>
   </footer>
 
-  <!-- TV data, one JSON per language (ui strings + projects, CH 2..N+1).
-       Keep both in sync with each other and with the #work fallbacks above. -->
   <script type="application/json" id="p9-i18n-en">
   {
     "ui": {

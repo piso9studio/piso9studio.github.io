@@ -1,4 +1,3 @@
-/* <piso9-intro>: control remoto → tele, WebGL propio (ver CLAUDE.md). */
 (function () {
   if (customElements.get('piso9-intro')) return;
 
@@ -64,7 +63,6 @@ void main(){
   gl_Position = uProj * uView * wp;
 }`;
 
-  // uMode: 0=pieza lit (key+fill+specular+rim+fog), 1=pantalla (uLine→uStatic), 2=label, 3=fondo (glow radial)
   const FRAG = `
 precision highp float;
 varying vec3 vNrm, vPos, vLocal;
@@ -73,16 +71,14 @@ uniform float uMode, uLine, uStatic, uTime, uCrtI, uFade;
 uniform sampler2D uTexL;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 void main(){
-  if (uMode > 3.5) { // velo del modo inspección: color plano con alpha uFade
+  if (uMode > 3.5) {
     gl_FragColor = vec4(uColor, uFade);
     return;
   }
   if (uMode > 2.5) {
-    // glow anclado a la tele (uSpot - offset), independiente del quad de pared
     vec2 q = vec2(vPos.x - uSpot.x, (vPos.y - (uSpot.y - 1.9)) * 1.3);
     float r = length(q) * 0.28;
     vec3 bg = mix(uWall, uWall * 0.38, smoothstep(0.15, 1.05, r));
-    // shaft: haz vertical tenue cayendo desde arriba sobre la tele
     float dx = vPos.x - uSpot.x;
     float shaft = exp(-dx * dx * 0.8) * smoothstep(-3.0, 2.2, vPos.y) * 0.085;
     bg += vec3(1.0, 0.96, 0.86) * shaft;
@@ -104,8 +100,6 @@ void main(){
     }
     float n = hash(floor(gl_FragCoord.xy * 0.5) + vec2(fract(uTime*11.3)*291.0, fract(uTime*7.7)*173.0));
     vec3 st = vec3(n * n * 0.85);
-    // mismo post-procesado que el static del boot del hero, para que al sacar
-    // el overlay no se note el corte (scanlines + fosforo + lift)
     st *= 1.0 - uCrtI * 0.10 * (0.5 + 0.5 * sin(gl_FragCoord.y * 1.7));
     st *= 1.0 - uCrtI * 0.03 * step(2.0, mod(gl_FragCoord.x, 3.0));
     st += 0.0392;
@@ -115,7 +109,6 @@ void main(){
   }
   vec3 N = normalize(vNrm);
   vec3 V = normalize(uEye - vPos);
-  // key cálida arriba-derecha-frente, fill fría tenue desde la izquierda
   vec3 L1 = normalize(vec3(0.45, 0.75, 0.5));
   vec3 L2 = normalize(vec3(-0.7, 0.15, 0.25));
   float d1 = max(dot(N, L1), 0.0);
@@ -123,8 +116,6 @@ void main(){
   vec3 H = normalize(L1 + V);
   float spec = pow(max(dot(N, H), 0.0), 40.0);
   float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-  // spot cenital sobre la tele (protagonista): cono con falloff por distancia,
-  // apenas adelantado para iluminar también el frente del gabinete
   vec3 sv = vPos - uSpot;
   float sdist = length(sv);
   vec3 SL = sv / sdist;
@@ -132,8 +123,8 @@ void main(){
   float att = 1.0 / (1.0 + 0.15 * sdist * sdist);
   float dspot = max(dot(N, -SL), 0.0);
   vec3 col = uColor * (0.12
-      + 0.60 * d1 * vec3(1.0, 0.93, 0.82)     // key cálida (cedida al spot)
-      + 0.26 * d2 * vec3(0.55, 0.65, 0.85)    // fill fría
+      + 0.60 * d1 * vec3(1.0, 0.93, 0.82)
+      + 0.26 * d2 * vec3(0.55, 0.65, 0.85)
       + 1.55 * dspot * cone * att * vec3(1.0, 0.96, 0.88))
     + vec3(1.0, 0.95, 0.85) * spec * 0.18
     + vec3(0.6, 0.65, 0.75) * rim * 0.22
@@ -185,7 +176,6 @@ void main(){
     };
   }
 
-  // cilindro generalizado (radios distintos abajo/arriba) con tapas — para el florero
   function cone(r0, r1, h, seg) {
     const P = [], I = [];
     const sl = Math.atan2(r0 - r1, h);
@@ -210,7 +200,6 @@ void main(){
     return { pos: new Float32Array(P), idx: new Uint16Array(I) };
   }
 
-  // superficie de revolución a partir de un perfil [[r, y], ...] — el florero
   function lathe(prof, seg) {
     const P = [], I = [];
     const N = prof.length;
@@ -231,7 +220,7 @@ void main(){
       const a = j * N + i, b = a + N;
       I.push(a, b, a + 1, a + 1, b, b + 1);
     }
-    const s0 = P.length / 6; // tapa de fondo
+    const s0 = P.length / 6;
     P.push(0, prof[0][1], 0, 0, -1, 0);
     for (let j = 0; j < seg; j++) {
       const a0 = j / seg * Math.PI * 2, a1 = (j + 1) / seg * Math.PI * 2;
@@ -243,8 +232,6 @@ void main(){
     return { pos: new Float32Array(P), idx: new Uint16Array(I) };
   }
 
-  // hoja de potus HD: grilla acorazonada con cuenco y caída de punta;
-  // base en el origen, punta en +y, normales numéricas
   function leaf() {
     const ROWS = 13, COLS = 9, P = [], I = [];
     const wAt = (s) => 0.56 * Math.pow(Math.sin(Math.min(s * 1.05, 1) * Math.PI), 0.65) * (1 - 0.22 * s);
@@ -252,7 +239,7 @@ void main(){
       const w = wAt(s);
       return [u * w, s,
         0.22 * s * s + 0.10 * u * u * w - 0.05 * Math.abs(u) * (1 - s)
-        - 0.028 * Math.sin(Math.PI * s) * (1 - Math.abs(u))]; // vena central
+        - 0.028 * Math.sin(Math.PI * s) * (1 - Math.abs(u))];
     };
     for (let r = 0; r < ROWS; r++) {
       const s = r / (ROWS - 1);
@@ -279,12 +266,11 @@ void main(){
   const REMOTE_POS = [0, -0.22, 1.35];
   const REMOTE_POS_P = [0, -0.39, 1.45];
   const REST_PITCH = -1.05, REST_YAW = 0.35, REST_ROLL = -0.3;
-  const TV_POS = [-0.55, 0.18, -1.6];   // arriba-izquierda (landscape)
-  const TV_POS_P = [-0.12, 0.5, -2.0];  // portrait: más centrada y alta
-  const TV_YAW = 0.55;                  // girada: lateral izquierdo hacia cámara;
-                                         // el dolly la endereza (yaw*(1-k))
+  const TV_POS = [-0.55, 0.18, -1.6];
+  const TV_POS_P = [-0.12, 0.5, -2.0];
+  const TV_YAW = 0.55;
   const SCREEN_W = 1.18, SCREEN_H = 0.82;
-  const SCREEN_LOCAL = [0, 0.02, 0.475]; // centro pantalla: 5mm proud del bisel (0.47, caja sólida)
+  const SCREEN_LOCAL = [0, 0.02, 0.475];
   const EYE0 = [0, 0.12, 2.5], TGT0 = [0, -0.05, 0];
   const EYE0_P = [0, 0.05, 3.4];
 
@@ -312,7 +298,7 @@ void main(){
       };
       const a = {
         click() { burst(0.05, 'highpass', 2200, 0.35); },
-        beep(row, col) { // DTMF real: filas 697/770/852 Hz, columnas 1209/1336/1477 Hz
+        beep(row, col) {
           const t = ctx.currentTime;
           [[697, 770, 852][row], [1209, 1336, 1477][col]].forEach(fr => {
             const o = ctx.createOscillator(), g = ctx.createGain();
@@ -323,7 +309,7 @@ void main(){
             o.start(t); o.stop(t + 0.1);
           });
         },
-        pluck() { // acordecito al levantar la planta
+        pluck() {
           const t = ctx.currentTime;
           [523, 784].forEach((fr, i) => {
             const o = ctx.createOscillator(), g = ctx.createGain();
@@ -336,7 +322,7 @@ void main(){
             o.start(t0); o.stop(t0 + 0.2);
           });
         },
-        tap() { // thunk suave para el d-pad
+        tap() {
           const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime;
           o.type = 'sine';
           o.frequency.setValueAtTime(180, t);
@@ -479,7 +465,6 @@ void main(){
         const dx = (e.clientX - this._drag.x) * 0.005;
         const dy = (e.clientY - this._drag.y) * 0.005;
         if (this._inspect && this._inspect.active) {
-          // inspección: el drag rota la planta libre en los dos ejes
           this._inspect.ry += dx * 1.5;
           this._inspect.rx += dy * 1.5;
         } else {
@@ -494,7 +479,6 @@ void main(){
         const d = this._drag;
         this._drag = null;
         if (!d || d.moved >= 6 || this._power) return;
-        // tap seco: en inspección sale; si no, prueba planta/keypad/d-pad
         if (this._inspect && this._inspect.active) { this._plantToggle(false); return; }
         this._remoteTap(e.clientX, e.clientY);
       });
@@ -585,7 +569,6 @@ void main(){
         this._keyBtns.push(m);
         r.push(m);
       }
-      // d-pad: 4 zonas lógicas sobre la cruz (centro [0, 0.04]); dir empuja el wiggle
       this._dpadZones = [
         { dir: [0, -1], pos: [0, 0.072, 0.026] },
         { dir: [0, 1], pos: [0, 0.008, 0.026] },
@@ -613,10 +596,6 @@ void main(){
       tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([-0.55, -0.555, 0]) }));
       tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([0.55, -0.555, 0]) }));
 
-      // mueble mid-century de madera bajo la tele: tapa con voladizo, cuerpo
-      // con frente de listones verticales y patas cilíndricas finas.
-      // this._shelfY: superficie de la tapa (local al grupo tv) — anclaje para
-      // apoyar futuros objetos easter egg encima del mueble.
       this._shelfY = -0.585;
       const WOOD = [0.50, 0.27, 0.12], WOOD_DARK = [0.20, 0.10, 0.045], WOOD_LEG = [0.55, 0.32, 0.15];
       tv.push(this._mesh(box(3.1, 0.05, 0.84), { color: WOOD, local: T([0, -0.61, 0]) }));
@@ -630,17 +609,12 @@ void main(){
       [[-1.35, -0.28], [-1.35, 0.28], [1.35, -0.28], [1.35, 0.28]].forEach(([lx, lz]) => {
         tv.push(this._mesh(cylinder(0.022, 0.26, 10), { color: WOOD_LEG, local: T([lx, -1.265, lz]) }));
       });
-      // habitación (todo local al grupo tv, comparte el escorzo del mueble):
-      // piso al ras de las patas, pared lateral derecha cerrando la esquina
-      // con la pared del fondo (_bgMesh), zócalos y alfombra. El fog funde
-      // todo a oscuro a la distancia y el spot dibuja su charco de luz.
       tv.push(this._mesh(quad(), {
         color: [0.062, 0.053, 0.045],
         local: M4.mul(M4.mul(T([0, -1.398, 0]), M4.rotX(-Math.PI / 2)), M4.scl([28, 28, 1]))
       }));
-      // color de pared: uniform uWall (fondo) + mesh lateral al 85%
       this._wall = [0.048, 0.066, 0.048];
-      this._sideWall = this._mesh(quad(), { // pared lateral (normal hacia el cuarto)
+      this._sideWall = this._mesh(quad(), {
         color: [this._wall[0] * 0.85, this._wall[1] * 0.85, this._wall[2] * 0.85],
         local: M4.mul(M4.mul(T([3.4, 0.9, 4.1]), M4.rotY(-Math.PI / 2)), M4.scl([12, 13, 1]))
       });
@@ -648,13 +622,11 @@ void main(){
       const SKIRT = [0.125, 0.115, 0.105];
       tv.push(this._mesh(box(26.6, 0.09, 0.03), { color: SKIRT, local: T([-9.9, -1.353, -1.885]) }));
       tv.push(this._mesh(box(0.03, 0.09, 12), { color: SKIRT, local: T([3.385, -1.353, 4.1]) }));
-      tv.push(this._mesh(box(4.1, 0.012, 3.0), { // alfombra: mueble encima + frente
+      tv.push(this._mesh(box(4.1, 0.012, 3.0), {
         color: [0.155, 0.11, 0.07],
         local: T([0.15, -1.392, 0.55])
       }));
 
-      // sillón mid-century al frente-derecha, mirando a la tele: patas de
-      // madera, cuerpo de tela, respaldo reclinado y apoyabrazos con tapa
       const CH = M4.mul(T([1.9, -1.398, 2.2]), M4.rotY(-2.43));
       const FABRIC = [0.34, 0.155, 0.085], FABRIC2 = [0.42, 0.20, 0.10];
       const chPart = (geo, opts, m) => tv.push(this._mesh(geo, Object.assign(opts, { local: M4.mul(CH, m) })));
@@ -669,27 +641,19 @@ void main(){
       chPart(box(0.15, 0.03, 0.74), { color: WOOD }, T([-0.375, 0.615, 0]));
       chPart(box(0.15, 0.03, 0.74), { color: WOOD }, T([0.375, 0.615, 0]));
 
-      // planta easter egg: potus en florero de vidrio ámbar, a la izquierda de
-      // la tapa del mueble. Meshes aparte (this._plantMeshes, locals relativos
-      // a la base del florero): en _frame se dibuja en el estante o al frente
-      // en modo inspección. this._plantPos = base, local al grupo tv.
       this._plantPos = [-1.25, this._shelfY, 0.12];
       const pl = [];
       const AMBER = { color: [0.66, 0.20, 0.05], emissive: [0.10, 0.025, 0.004] };
-      // florero: perfil de damajuana (panza, hombro, cuello con labio), lathe 32 seg
       pl.push(this._mesh(lathe([
         [0.055, 0], [0.085, 0.008], [0.105, 0.025], [0.113, 0.05], [0.110, 0.075],
         [0.098, 0.10], [0.082, 0.122], [0.068, 0.142], [0.056, 0.165], [0.047, 0.192],
         [0.041, 0.22], [0.037, 0.25], [0.035, 0.28], [0.035, 0.305], [0.038, 0.322], [0.040, 0.33]
       ], 32), Object.assign({}, AMBER)));
-      // línea de agua: anillo apenas proud, más oscuro, como en el vidrio real
       pl.push(this._mesh(cylinder(0.0465, 0.010, 32), {
         color: [0.42, 0.10, 0.02], emissive: [0.05, 0.01, 0], local: T([0, 0.20, 0])
       }));
       const STEM = [0.30, 0.44, 0.14], STEM2 = [0.42, 0.55, 0.20];
       const LEAF = [0.13, 0.30, 0.09], LEAF2 = [0.30, 0.42, 0.14], LEAF3 = [0.095, 0.235, 0.07];
-      // tallos curvos: cadena de conos que se afinan y aclaran hacia la punta;
-      // devuelve la matriz del extremo para colgar la hoja
       const addStem = (rz0, rx0, bz, bx, segs, segLen) => {
         let m = M4.mul(M4.mul(T([0, 0.315, 0]), M4.rotZ(rz0)), M4.rotX(rx0));
         for (let i = 0; i < segs; i++) {
@@ -713,10 +677,8 @@ void main(){
       addLeaf(addStem(0.20, -0.45, 0.06, -0.12, 4, 0.045), 0.15, -1.05, 0.11, LEAF3);
       addLeaf(addStem(-0.55, -0.10, -0.16, -0.06, 6, 0.050), -0.70, -0.60, 0.125, LEAF2);
       addLeaf(addStem(0.75, -0.10, 0.14, -0.06, 5, 0.048), 0.55, -0.85, 0.10, LEAF3);
-      // tallo largo que se descuelga por el borde del florero
       addLeaf(addStem(-1.15, 0.05, -0.22, 0.04, 7, 0.055), -0.85, -0.35, 0.15, LEAF);
       this._plantMeshes = pl;
-      // velo del modo inspección (mode 4: color plano + alpha uFade)
       this._fadeMesh = this._mesh(quad(), { mode: 4, blend: true, color: [0.012, 0.012, 0.015] });
       tv.push(this._mesh(cylinder(0.008, 0.7, 6), {
         color: [0.2, 0.2, 0.2], local: M4.mul(T([-0.18, 0.85, -0.1]), M4.rotZ(0.45))
@@ -726,11 +688,9 @@ void main(){
       }));
       this._tvMeshes = tv;
 
-      // pared del fondo: local al grupo tv (paralela al mueble, comparte el
-      // yaw) — la junta piso-pared corre en diagonal acompañando el escorzo
       this._bgMesh = this._mesh(quad(), {
         mode: 3,
-        local: M4.mul(M4.t([-9.9, 0.9, -1.9]), M4.scl([26.6, 13, 1])) // termina en la esquina (x=3.4)
+        local: M4.mul(M4.t([-9.9, 0.9, -1.9]), M4.scl([26.6, 13, 1]))
       });
 
       this._rot = { yaw: 0, pitch: 0 };
@@ -788,8 +748,6 @@ void main(){
         this._rot.yaw = clamp(this._rot.yaw + this._vel.yaw * dt, -2.5, 2.5);
         this._rot.pitch = clamp(this._rot.pitch + this._vel.pitch * dt, -1.4, 1.4);
       }
-      // modo inspección de la planta: k anima entrada/salida; el control se
-      // hunde fuera de cuadro (_inspDrop) mientras dura
       const insp = this._inspect || (this._inspect = { active: false, k: 0, rx: 0, ry: 0 });
       insp.k = clamp(insp.k + (insp.active ? dt * 2.5 : -dt * 2.5), 0, 1);
       const ik = ease(insp.k);
@@ -803,7 +761,7 @@ void main(){
         this._keyBtns[i].local = M4.mul(
           M4.t([k.pos[0], k.pos[1], k.pos[2] - 0.008 * dep]), M4.rotX(Math.PI / 2));
       }
-      if (this._irT0) { // blink del LED IR al apretar una tecla (el power lo pisa)
+      if (this._irT0) {
         const ti = (now - this._irT0) / 1000;
         this._irLed.emissive = ti < 0.12 ? [0.5, 0.06, 0.03] : [0, 0, 0];
         if (ti >= 0.12) this._irT0 = 0;
@@ -818,7 +776,7 @@ void main(){
         if (tp >= 0.15 && !this._power.thunked) {
           this._power.thunked = true;
           if (this._audio) this._audio.thunk();
-          this._standbyLed.emissive = [0.08, 0.5, 0.12]; // encendida: LED verde
+          this._standbyLed.emissive = [0.08, 0.5, 0.12];
           this._standbyLed.color = [0.04, 0.16, 0.05];
         }
         this._uLine = clamp((tp - 0.15) / 0.3, 0, 1);
@@ -837,7 +795,7 @@ void main(){
           const sc = [tp0[0] + SCREEN_LOCAL[0], tp0[1] + SCREEN_LOCAL[1], tp0[2] + SCREEN_LOCAL[2]];
           const dH = (SCREEN_H / 2) / Math.tan(FOV / 2);
           const dW = (SCREEN_W / 2) / (Math.tan(FOV / 2) * asp);
-          const dEnd = Math.min(dH, dW) * 0.96; // 4% de margen: bordes no entran
+          const dEnd = Math.min(dH, dW) * 0.96;
           const eye0 = (this._portrait ? EYE0_P : EYE0);
           this._cam.eye = lerp3(eye0, [sc[0], sc[1], sc[2] + dEnd], k);
           this._cam.tgt = lerp3(TGT0, sc, k);
@@ -857,13 +815,10 @@ void main(){
       gl.uniformMatrix4fv(this._u.uProj, false, M4.persp(FOV, w / h, 0.05, 20));
       gl.uniformMatrix4fv(this._u.uView, false, M4.lookAt(this._cam.eye, this._cam.tgt, [0, 1, 0]));
       gl.uniform3fv(this._u.uEye, this._cam.eye);
-      // spot cenital anclado a la tele (arriba y apenas adelante)
       const tvp = this._portrait ? TV_POS_P : TV_POS;
       gl.uniform3fv(this._u.uSpot, [tvp[0], tvp[1] + 2.2, tvp[2] + 1.5]);
       gl.uniform3fv(this._u.uWall, this._wall);
       gl.uniform1f(this._u.uLine, this._uLine);
-      // interferencia IR: shiver de static en la pantalla apagada al apretar
-      // botones del control (decae en ~200ms, con un flicker leve encima)
       let shiver = 0;
       if (this._shiverT0) {
         const ts = (now - this._shiverT0) / 1000;
@@ -879,8 +834,6 @@ void main(){
       for (let i = 0; i < this._tvMeshes.length; i++) this._draw(this._tvMeshes[i], tg);
       for (let i = 0; i < this._remoteMeshes.length; i++) this._draw(this._remoteMeshes[i], rg);
 
-      // planta: en el estante, o viniendo al frente en modo inspección (con el
-      // velo fundiendo la escena atrás). La rotación del drag va en rx/ry.
       const cE = this._cam.eye, cT = this._cam.tgt;
       const cz = norm3(sub3(cE, cT)), cx = norm3(cross3([0, 1, 0], cz)), cy = cross3(cz, cx);
       const centerShelf = M4.xform(tg, [this._plantPos[0], this._plantPos[1] + 0.28, this._plantPos[2]]);
@@ -931,14 +884,12 @@ void main(){
       if (c[3] <= 0) return null;
       const x = (c[0] / c[3] * 0.5 + 0.5) * w;
       const y = (1 - (c[1] / c[3] * 0.5 + 0.5)) * h;
-      // radio: proyecta punto +0.026 (radio) en X
       const wc2 = [wc[0] + 0.026, wc[1], wc[2]];
       const c2 = M4.xform(vp, [wc2[0], wc2[1], wc2[2], 1]);
       const r = Math.abs((c2[0] / c2[3] * 0.5 + 0.5) * w - x);
       return { x, y, r: Math.max(r, 10) };
     }
 
-    // punto local del control → px CSS de pantalla; null si quedó detrás de cámara
     _remotePointScreen(local, g, vp) {
       const w = this.clientWidth, h = this.clientHeight;
       const wc = M4.xform(g, local);
@@ -947,16 +898,11 @@ void main(){
       return { x: (c[0] / c[3] * 0.5 + 0.5) * w, y: (1 - (c[1] / c[3] * 0.5 + 0.5)) * h };
     }
 
-    // easter egg: tap sobre el keypad (beep DTMF + dígito que pre-sintoniza el
-    // canal al prender) o el d-pad (wiggle). Hit-testing por proyección de los
-    // centros, mismo camino que _powerScreen; el más cercano dentro del radio.
     _remoteTap(px, py) {
       const w = this.clientWidth, h = this.clientHeight;
       if (!w || !h) return;
       const vp = M4.mul(M4.persp(FOV, w / h, 0.05, 20), M4.lookAt(this._cam.eye, this._cam.tgt, [0, 1, 0]));
       const g = this._remoteGroup((performance.now() - this._t0) / 1000);
-      // primero la planta (grupo tv): click → modo inspección. Solo desktop:
-      // en mobile (táctil o <720px) quedan activas solo las features del control
       const mobile = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || this.clientWidth < 720;
       if (!mobile) {
         const tg = this._tvGroup();
@@ -973,7 +919,7 @@ void main(){
         const s = this._remotePointScreen(pos, g, vp);
         if (!s) return;
         const edge = this._remotePointScreen([pos[0] + 0.02, pos[1], pos[2]], g, vp);
-        const rr = Math.max(edge ? Math.hypot(edge.x - s.x, edge.y - s.y) : 0, 18); // piso táctil 18px
+        const rr = Math.max(edge ? Math.hypot(edge.x - s.x, edge.y - s.y) : 0, 18);
         const dd = Math.hypot(px - s.x, py - s.y);
         if (dd < rr && (!best || dd < best.d)) best = { d: dd, payload };
       };
@@ -981,7 +927,7 @@ void main(){
       for (const z of this._dpadZones) consider(z.pos, { dpad: z });
       if (!best) return;
       const audio = this._ensureAudio();
-      this._shiverT0 = performance.now(); // el pulso IR "llega" a la tele
+      this._shiverT0 = performance.now();
       if (best.payload.key) {
         const k = best.payload.key._key;
         k.t0 = performance.now();
@@ -996,7 +942,6 @@ void main(){
       }
     }
 
-    // audio lazy, gateado por el mute global del hero (localStorage 'p9-sound')
     _ensureAudio() {
       if (this._audio === undefined) {
         let on = true;
@@ -1006,8 +951,6 @@ void main(){
       return this._audio;
     }
 
-    // easter egg: entrar/salir del modo inspección de la planta. La animación
-    // (k) corre en _frame; acá solo estado, sonido y analytics.
     _plantToggle(on) {
       const insp = this._inspect || (this._inspect = { active: false, k: 0, rx: 0, ry: 0 });
       if (insp.active === on) return;
