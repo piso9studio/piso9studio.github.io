@@ -69,10 +69,14 @@ void main(){
 precision highp float;
 varying vec3 vNrm, vPos, vLocal;
 uniform vec3 uColor, uEmissive, uEye, uSpot;
-uniform float uMode, uLine, uStatic, uTime, uCrtI;
+uniform float uMode, uLine, uStatic, uTime, uCrtI, uFade;
 uniform sampler2D uTexL;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 void main(){
+  if (uMode > 3.5) { // velo del modo inspección: color plano con alpha uFade
+    gl_FragColor = vec4(uColor, uFade);
+    return;
+  }
   if (uMode > 2.5) {
     // glow anclado a la tele (uSpot - offset), independiente del quad de pared
     vec2 q = vec2(vPos.x - uSpot.x, (vPos.y - (uSpot.y - 1.9)) * 1.3);
@@ -181,6 +185,93 @@ void main(){
     };
   }
 
+  // cilindro generalizado (radios distintos abajo/arriba) con tapas — para el florero
+  function cone(r0, r1, h, seg) {
+    const P = [], I = [];
+    const sl = Math.atan2(r0 - r1, h);
+    const cs = Math.cos(sl), sn = Math.sin(sl);
+    for (let i = 0; i < seg; i++) {
+      const a0 = i / seg * Math.PI * 2, a1 = (i + 1) / seg * Math.PI * 2;
+      const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+      let s = P.length / 6;
+      P.push(
+        r0 * c0, -h / 2, r0 * s0, c0 * cs, sn, s0 * cs,
+        r0 * c1, -h / 2, r0 * s1, c1 * cs, sn, s1 * cs,
+        r1 * c1, h / 2, r1 * s1, c1 * cs, sn, s1 * cs,
+        r1 * c0, h / 2, r1 * s0, c0 * cs, sn, s0 * cs);
+      I.push(s, s + 1, s + 2, s, s + 2, s + 3);
+      s = P.length / 6;
+      P.push(0, h / 2, 0, 0, 1, 0, r1 * c0, h / 2, r1 * s0, 0, 1, 0, r1 * c1, h / 2, r1 * s1, 0, 1, 0);
+      I.push(s, s + 1, s + 2);
+      s = P.length / 6;
+      P.push(0, -h / 2, 0, 0, -1, 0, r0 * c1, -h / 2, r0 * s1, 0, -1, 0, r0 * c0, -h / 2, r0 * s0, 0, -1, 0);
+      I.push(s, s + 1, s + 2);
+    }
+    return { pos: new Float32Array(P), idx: new Uint16Array(I) };
+  }
+
+  // superficie de revolución a partir de un perfil [[r, y], ...] — el florero
+  function lathe(prof, seg) {
+    const P = [], I = [];
+    const N = prof.length;
+    const nrm = prof.map((p, i) => {
+      const a = prof[Math.max(i - 1, 0)], b = prof[Math.min(i + 1, N - 1)];
+      const dy = b[1] - a[1], dr = b[0] - a[0];
+      const l = Math.hypot(dy, dr) || 1;
+      return [dy / l, -dr / l];
+    });
+    for (let j = 0; j <= seg; j++) {
+      const a = j / seg * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+      for (let i = 0; i < N; i++) {
+        P.push(prof[i][0] * c, prof[i][1], prof[i][0] * s,
+          nrm[i][0] * c, nrm[i][1], nrm[i][0] * s);
+      }
+    }
+    for (let j = 0; j < seg; j++) for (let i = 0; i < N - 1; i++) {
+      const a = j * N + i, b = a + N;
+      I.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+    const s0 = P.length / 6; // tapa de fondo
+    P.push(0, prof[0][1], 0, 0, -1, 0);
+    for (let j = 0; j < seg; j++) {
+      const a0 = j / seg * Math.PI * 2, a1 = (j + 1) / seg * Math.PI * 2;
+      const b0 = P.length / 6;
+      P.push(prof[0][0] * Math.cos(a1), prof[0][1], prof[0][0] * Math.sin(a1), 0, -1, 0,
+        prof[0][0] * Math.cos(a0), prof[0][1], prof[0][0] * Math.sin(a0), 0, -1, 0);
+      I.push(s0, b0, b0 + 1);
+    }
+    return { pos: new Float32Array(P), idx: new Uint16Array(I) };
+  }
+
+  // hoja de potus HD: grilla acorazonada con cuenco y caída de punta;
+  // base en el origen, punta en +y, normales numéricas
+  function leaf() {
+    const ROWS = 9, COLS = 7, P = [], I = [];
+    const wAt = (s) => 0.56 * Math.pow(Math.sin(Math.min(s * 1.05, 1) * Math.PI), 0.65) * (1 - 0.22 * s);
+    const pt = (s, u) => {
+      const w = wAt(s);
+      return [u * w, s, 0.22 * s * s + 0.10 * u * u * w - 0.05 * Math.abs(u) * (1 - s)];
+    };
+    for (let r = 0; r < ROWS; r++) {
+      const s = r / (ROWS - 1);
+      for (let c = 0; c < COLS; c++) {
+        const u = c / (COLS - 1) * 2 - 1;
+        const p = pt(s, u);
+        const e = 0.01;
+        const ts = pt(Math.min(s + e, 1), u), tu = pt(s, u + e);
+        const n = norm3(cross3(
+          [tu[0] - p[0], tu[1] - p[1], tu[2] - p[2]],
+          [ts[0] - p[0], ts[1] - p[1], ts[2] - p[2]]));
+        P.push(p[0], p[1], p[2], n[0], n[1], n[2]);
+      }
+    }
+    for (let r = 0; r < ROWS - 1; r++) for (let c = 0; c < COLS - 1; c++) {
+      const a = r * COLS + c, b = a + COLS;
+      I.push(a, a + 1, b, a + 1, b + 1, b);
+    }
+    return { pos: new Float32Array(P), idx: new Uint16Array(I) };
+  }
+
   const FOV = 0.87;
 
   const REMOTE_POS = [0, -0.22, 1.35];
@@ -228,6 +319,19 @@ void main(){
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
             o.connect(g); g.connect(master);
             o.start(t); o.stop(t + 0.1);
+          });
+        },
+        pluck() { // acordecito al levantar la planta
+          const t = ctx.currentTime;
+          [523, 784].forEach((fr, i) => {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'sine'; o.frequency.value = fr;
+            const t0 = t + i * 0.07;
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.linearRampToValueAtTime(0.16, t0 + 0.015);
+            g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.16);
+            o.connect(g); g.connect(master);
+            o.start(t0); o.stop(t0 + 0.2);
           });
         },
         tap() { // thunk suave para el d-pad
@@ -320,7 +424,7 @@ void main(){
       gl.useProgram(prog);
 
       this._u = {};
-      ['uProj', 'uView', 'uModel', 'uColor', 'uEmissive', 'uEye', 'uSpot', 'uMode', 'uLine', 'uStatic', 'uTime', 'uTexL', 'uCrtI'].forEach(n => {
+      ['uProj', 'uView', 'uModel', 'uColor', 'uEmissive', 'uEye', 'uSpot', 'uMode', 'uLine', 'uStatic', 'uTime', 'uTexL', 'uCrtI', 'uFade'].forEach(n => {
         this._u[n] = gl.getUniformLocation(prog, n);
       });
       this._aPos = gl.getAttribLocation(prog, 'aPos');
@@ -372,21 +476,36 @@ void main(){
         const dt = Math.max(now - this._drag.t, 1) / 1000;
         const dx = (e.clientX - this._drag.x) * 0.005;
         const dy = (e.clientY - this._drag.y) * 0.005;
-        this._rot.yaw = clamp(this._rot.yaw + dx, -2.5, 2.5);
-        this._rot.pitch = clamp(this._rot.pitch + dy, -1.4, 1.4);
-        this._vel.yaw = dx / dt; this._vel.pitch = dy / dt;
+        if (this._inspect && this._inspect.active) {
+          // inspección: el drag rota la planta libre en los dos ejes
+          this._inspect.ry += dx * 1.5;
+          this._inspect.rx += dy * 1.5;
+        } else {
+          this._rot.yaw = clamp(this._rot.yaw + dx, -2.5, 2.5);
+          this._rot.pitch = clamp(this._rot.pitch + dy, -1.4, 1.4);
+          this._vel.yaw = dx / dt; this._vel.pitch = dy / dt;
+        }
         this._drag.x = e.clientX; this._drag.y = e.clientY; this._drag.t = now;
         this._drag.moved = Math.max(this._drag.moved, Math.hypot(e.clientX - this._drag.x0, e.clientY - this._drag.y0));
       });
       this.addEventListener('pointerup', (e) => {
         const d = this._drag;
         this._drag = null;
-        // tap seco (no drag, no power en curso): probar keypad/d-pad
-        if (d && d.moved < 6 && !this._power) this._remoteTap(e.clientX, e.clientY);
+        if (!d || d.moved >= 6 || this._power) return;
+        // tap seco: en inspección sale; si no, prueba planta/keypad/d-pad
+        if (this._inspect && this._inspect.active) { this._plantToggle(false); return; }
+        this._remoteTap(e.clientX, e.clientY);
       });
       this.addEventListener('pointercancel', () => { this._drag = null; });
 
       this._onIntroKey = (e) => {
+        if (this._inspect && this._inspect.active) {
+          if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            this._plantToggle(false);
+          }
+          return;
+        }
         if ((e.key === 'Enter' || e.key === ' ') && document.activeElement !== this._btn) {
           e.preventDefault();
           this._press();
@@ -528,6 +647,47 @@ void main(){
         color: [0.155, 0.11, 0.07],
         local: T([0.15, -1.392, 0.55])
       }));
+
+      // planta easter egg: potus en florero de vidrio ámbar, a la izquierda de
+      // la tapa del mueble. Meshes aparte (this._plantMeshes, locals relativos
+      // a la base del florero): en _frame se dibuja en el estante o al frente
+      // en modo inspección. this._plantPos = base, local al grupo tv.
+      this._plantPos = [-1.0, this._shelfY, 0.12];
+      const pl = [];
+      const AMBER = { color: [0.66, 0.20, 0.05], emissive: [0.10, 0.025, 0.004] };
+      // florero: perfil de damajuana (panza, hombro, cuello con labio), lathe 24 seg
+      pl.push(this._mesh(lathe([
+        [0.055, 0], [0.098, 0.012], [0.113, 0.045], [0.106, 0.085],
+        [0.082, 0.12], [0.060, 0.155], [0.047, 0.195], [0.040, 0.235],
+        [0.036, 0.27], [0.035, 0.30], [0.038, 0.322], [0.040, 0.33]
+      ], 24), Object.assign({}, AMBER)));
+      const STEM = [0.32, 0.46, 0.15], LEAF = [0.13, 0.30, 0.09], LEAF2 = [0.30, 0.42, 0.14];
+      // tallos curvos: cadena de conos que se afinan, doblando de a poco;
+      // devuelve la matriz del extremo para colgar la hoja
+      const addStem = (rz0, rx0, bz, bx, segs, segLen) => {
+        let m = M4.mul(M4.mul(T([0, 0.315, 0]), M4.rotZ(rz0)), M4.rotX(rx0));
+        for (let i = 0; i < segs; i++) {
+          pl.push(this._mesh(cone(0.007 * (1 - i * 0.09), 0.007 * (1 - (i + 1) * 0.09), segLen, 8), {
+            color: STEM, local: M4.mul(m, T([0, segLen / 2, 0]))
+          }));
+          m = M4.mul(M4.mul(M4.mul(m, T([0, segLen, 0])), M4.rotZ(bz)), M4.rotX(bx));
+        }
+        return m;
+      };
+      const addLeaf = (end, rz, rx, s, c) => {
+        pl.push(this._mesh(leaf(), {
+          color: c, local: M4.mul(M4.mul(M4.mul(end, M4.rotZ(rz)), M4.rotX(rx)), M4.scl([s, s * 1.5, s]))
+        }));
+      };
+      addLeaf(addStem(0.50, 0.15, 0.10, -0.04, 5, 0.055), 0.35, -0.75, 0.13, LEAF);
+      addLeaf(addStem(-0.30, -0.30, -0.10, -0.05, 5, 0.060), -0.30, -0.80, 0.145, LEAF2);
+      addLeaf(addStem(0.05, 0.30, 0.02, 0.10, 4, 0.050), 0.10, -1.00, 0.12, LEAF);
+      addLeaf(addStem(-0.85, 0.10, -0.14, 0.02, 5, 0.050), -0.50, -0.55, 0.135, LEAF2);
+      addLeaf(addStem(0.20, -0.45, 0.06, -0.12, 4, 0.045), 0.15, -1.05, 0.11, LEAF);
+      addLeaf(addStem(-0.55, -0.10, -0.16, -0.06, 6, 0.050), -0.70, -0.60, 0.125, LEAF2);
+      this._plantMeshes = pl;
+      // velo del modo inspección (mode 4: color plano + alpha uFade)
+      this._fadeMesh = this._mesh(quad(), { mode: 4, blend: true, color: [0.012, 0.012, 0.015] });
       tv.push(this._mesh(cylinder(0.008, 0.7, 6), {
         color: [0.2, 0.2, 0.2], local: M4.mul(T([-0.18, 0.85, -0.1]), M4.rotZ(0.45))
       }));
@@ -575,7 +735,7 @@ void main(){
 
     _remoteGroup(t) {
       const pos = (this._portrait ? REMOTE_POS_P : REMOTE_POS).slice();
-      pos[1] += Math.sin(t * 1.3) * 0.008 - this._powerAnim.drop;
+      pos[1] += Math.sin(t * 1.3) * 0.008 - this._powerAnim.drop - (this._inspDrop || 0);
       const wobble = Math.sin(t * 0.7) * 0.02;
       return M4.trs(pos, REST_PITCH + this._rot.pitch, REST_YAW + this._rot.yaw + wobble, REST_ROLL);
     }
@@ -598,6 +758,12 @@ void main(){
         this._rot.yaw = clamp(this._rot.yaw + this._vel.yaw * dt, -2.5, 2.5);
         this._rot.pitch = clamp(this._rot.pitch + this._vel.pitch * dt, -1.4, 1.4);
       }
+      // modo inspección de la planta: k anima entrada/salida; el control se
+      // hunde fuera de cuadro (_inspDrop) mientras dura
+      const insp = this._inspect || (this._inspect = { active: false, k: 0, rx: 0, ry: 0 });
+      insp.k = clamp(insp.k + (insp.active ? dt * 2.5 : -dt * 2.5), 0, 1);
+      const ik = ease(insp.k);
+      this._inspDrop = 1.6 * ik;
       for (let i = 0; i < this._keyBtns.length; i++) {
         const k = this._keyBtns[i]._key;
         if (!k.t0) continue;
@@ -682,8 +848,32 @@ void main(){
       for (let i = 0; i < this._tvMeshes.length; i++) this._draw(this._tvMeshes[i], tg);
       for (let i = 0; i < this._remoteMeshes.length; i++) this._draw(this._remoteMeshes[i], rg);
 
+      // planta: en el estante, o viniendo al frente en modo inspección (con el
+      // velo fundiendo la escena atrás). La rotación del drag va en rx/ry.
+      const cE = this._cam.eye, cT = this._cam.tgt;
+      const cz = norm3(sub3(cE, cT)), cx = norm3(cross3([0, 1, 0], cz)), cy = cross3(cz, cx);
+      const centerShelf = M4.xform(tg, [this._plantPos[0], this._plantPos[1] + 0.28, this._plantPos[2]]);
+      const centerInsp = [cE[0] - cz[0] * 0.9, cE[1] - cz[1] * 0.9, cE[2] - cz[2] * 0.9];
+      const pp = lerp3(centerShelf, centerInsp, ik);
+      const yawNow = TV_YAW * (1 - this._dollyK);
+      const pScale = 1 + 0.12 * ik;
+      const pg2 = M4.mul(
+        M4.mul(M4.t(pp), M4.mul(M4.rotX(insp.rx * ik), M4.rotY(yawNow * (1 - ik) + insp.ry * ik))),
+        M4.mul(M4.scl([pScale, pScale, pScale]), M4.t([0, -0.28, 0])));
+      if (ik > 0.001) {
+        gl.uniform1f(this._u.uFade, 0.82 * ik);
+        gl.disable(gl.DEPTH_TEST);
+        const cam = new Float32Array([cx[0], cx[1], cx[2], 0, cy[0], cy[1], cy[2], 0, cz[0], cz[1], cz[2], 0, cE[0], cE[1], cE[2], 1]);
+        this._fadeMesh.local = M4.mul(cam, M4.mul(M4.t([0, 0, -0.2]), M4.scl([2, 2, 1])));
+        this._draw(this._fadeMesh, null);
+        gl.enable(gl.DEPTH_TEST);
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+      }
+      for (let i = 0; i < this._plantMeshes.length; i++) this._draw(this._plantMeshes[i], pg2);
+
       const ps = this._powerScreen();
-      if (ps) {
+      if (ps && ik < 0.01) {
+        this._btn.style.display = 'block';
         const d = ps.r * 2.2;
         this._btn.style.left = (ps.x - d / 2) + 'px';
         this._btn.style.top = (ps.y - d / 2) + 'px';
@@ -692,6 +882,7 @@ void main(){
         this._hovered = !this._power && this._px >= 0 &&
           Math.hypot(this._px - ps.x, this._py - ps.y) < Math.max(ps.r * 1.4, 24);
       } else {
+        this._btn.style.display = 'none';
         this._hovered = false;
       }
       const glow = this._hovered ? 0.35 : 0.12;
@@ -733,6 +924,15 @@ void main(){
       if (!w || !h) return;
       const vp = M4.mul(M4.persp(FOV, w / h, 0.05, 20), M4.lookAt(this._cam.eye, this._cam.tgt, [0, 1, 0]));
       const g = this._remoteGroup((performance.now() - this._t0) / 1000);
+      // primero la planta (grupo tv): click → modo inspección
+      const tg = this._tvGroup();
+      const pcL = [this._plantPos[0], this._plantPos[1] + 0.28, this._plantPos[2]];
+      const pc = this._remotePointScreen(pcL, tg, vp);
+      if (pc) {
+        const pe = this._remotePointScreen([pcL[0] + 0.28, pcL[1], pcL[2]], tg, vp);
+        const pr = Math.max(pe ? Math.hypot(pe.x - pc.x, pe.y - pc.y) : 0, 26);
+        if (Math.hypot(px - pc.x, py - pc.y) < pr) { this._plantToggle(true); return; }
+      }
       let best = null;
       const consider = (pos, payload) => {
         const s = this._remotePointScreen(pos, g, vp);
@@ -773,8 +973,20 @@ void main(){
       return this._audio;
     }
 
+    // easter egg: entrar/salir del modo inspección de la planta. La animación
+    // (k) corre en _frame; acá solo estado, sonido y analytics.
+    _plantToggle(on) {
+      const insp = this._inspect || (this._inspect = { active: false, k: 0, rx: 0, ry: 0 });
+      if (insp.active === on) return;
+      insp.active = on;
+      if (on) { insp.rx = 0; insp.ry = 0; }
+      const audio = this._ensureAudio();
+      if (audio) { if (on) audio.pluck(); else audio.tap(); }
+      if (on && window.posthog) posthog.capture('intro_plant_inspected');
+    }
+
     _press() {
-      if (this._power) return;
+      if (this._power || (this._inspect && this._inspect.active)) return;
       this._power = { t0: performance.now(), thunked: false, hissed: false, done: false };
       const audio = this._ensureAudio();
       if (audio) audio.click();

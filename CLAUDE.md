@@ -72,6 +72,14 @@ La tele está apoyada en un mueble de madera mid-century (tapa con voladizo,
 frente de listones, patas cilíndricas) construido en `_buildScene` dentro del
 grupo tv. `this._shelfY` (-0.585, local al grupo) es la superficie de la tapa:
 anclaje pensado para apoyar futuros objetos easter egg encima del mueble.
+Sobre la tapa vive el primer objeto easter egg: un potus en florero de vidrio
+ámbar (`this._plantMeshes`, lathe + hojas paramétricas), a la izquierda de la
+tele. Click → **modo inspección**: el control se hunde fuera de cuadro, la
+escena se funde a oscuro (mesh mode 4 + uniform `uFade`) y la planta viene al
+frente, rotable en todos los ejes con drag; tap suelto o Escape la devuelve.
+Evento PostHog `intro_plant_inspected`. El patrón (objeto en `_shelfY` +
+`_plantToggle`-style) es la plantilla para futuros objetos inspeccionables.
+
 La habitación entera vive en el grupo tv (comparte el yaw del mueble, así
 las juntas corren en diagonal con el escorzo): piso al ras de las patas,
 pared de fondo con glow anclado a la tele (mode 3, centrado vía `uSpot`),
