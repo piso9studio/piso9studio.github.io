@@ -74,8 +74,9 @@ uniform sampler2D uTexL;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 void main(){
   if (uMode > 2.5) {
-    vec2 q = vLocal.xy;
-    float r = length(q * vec2(1.3, 1.0)) * 2.0;
+    // glow anclado a la tele (uSpot - offset), independiente del quad de pared
+    vec2 q = vec2(vPos.x - uSpot.x, (vPos.y - (uSpot.y - 1.9)) * 1.3);
+    float r = length(q) * 0.28;
     vec3 bg = mix(vec3(0.06, 0.052, 0.045), vec3(0.024), smoothstep(0.15, 1.05, r));
     // shaft: haz vertical tenue cayendo desde arriba sobre la tele
     float dx = vPos.x - uSpot.x;
@@ -508,6 +509,25 @@ void main(){
       [[-1.35, -0.28], [-1.35, 0.28], [1.35, -0.28], [1.35, 0.28]].forEach(([lx, lz]) => {
         tv.push(this._mesh(cylinder(0.022, 0.26, 10), { color: WOOD_LEG, local: T([lx, -1.265, lz]) }));
       });
+      // habitación (todo local al grupo tv, comparte el escorzo del mueble):
+      // piso al ras de las patas, pared lateral derecha cerrando la esquina
+      // con la pared del fondo (_bgMesh), zócalos y alfombra. El fog funde
+      // todo a oscuro a la distancia y el spot dibuja su charco de luz.
+      tv.push(this._mesh(quad(), {
+        color: [0.062, 0.053, 0.045],
+        local: M4.mul(M4.mul(T([0, -1.398, 0]), M4.rotX(-Math.PI / 2)), M4.scl([28, 28, 1]))
+      }));
+      tv.push(this._mesh(quad(), { // pared lateral (normal hacia el cuarto)
+        color: [0.052, 0.047, 0.042],
+        local: M4.mul(M4.mul(T([3.4, 0.9, 4.1]), M4.rotY(-Math.PI / 2)), M4.scl([12, 13, 1]))
+      }));
+      const SKIRT = [0.125, 0.115, 0.105];
+      tv.push(this._mesh(box(26.6, 0.09, 0.03), { color: SKIRT, local: T([-9.9, -1.353, -1.885]) }));
+      tv.push(this._mesh(box(0.03, 0.09, 12), { color: SKIRT, local: T([3.385, -1.353, 4.1]) }));
+      tv.push(this._mesh(box(2.7, 0.012, 1.7), { // alfombra frente al mueble
+        color: [0.155, 0.11, 0.07],
+        local: T([0.3, -1.392, 1.15])
+      }));
       tv.push(this._mesh(cylinder(0.008, 0.7, 6), {
         color: [0.2, 0.2, 0.2], local: M4.mul(T([-0.18, 0.85, -0.1]), M4.rotZ(0.45))
       }));
@@ -516,9 +536,11 @@ void main(){
       }));
       this._tvMeshes = tv;
 
+      // pared del fondo: local al grupo tv (paralela al mueble, comparte el
+      // yaw) — la junta piso-pared corre en diagonal acompañando el escorzo
       this._bgMesh = this._mesh(quad(), {
         mode: 3,
-        local: M4.mul(M4.t([0, 0.1, -4.5]), M4.scl([14, 9, 1]))
+        local: M4.mul(M4.t([-9.9, 0.9, -1.9]), M4.scl([26.6, 13, 1])) // termina en la esquina (x=3.4)
       });
 
       this._rot = { yaw: 0, pitch: 0 };
@@ -656,7 +678,7 @@ void main(){
       gl.uniform1f(this._u.uCrtI, this.clientWidth < 720 ? 0 : 1);
       const rg = this._remoteGroup(t);
       const tg = this._tvGroup();
-      this._draw(this._bgMesh, null);
+      this._draw(this._bgMesh, tg);
       for (let i = 0; i < this._tvMeshes.length; i++) this._draw(this._tvMeshes[i], tg);
       for (let i = 0; i < this._remoteMeshes.length; i++) this._draw(this._remoteMeshes[i], rg);
 

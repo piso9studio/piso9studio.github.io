@@ -72,6 +72,11 @@ La tele está apoyada en un mueble de madera mid-century (tapa con voladizo,
 frente de listones, patas cilíndricas) construido en `_buildScene` dentro del
 grupo tv. `this._shelfY` (-0.585, local al grupo) es la superficie de la tapa:
 anclaje pensado para apoyar futuros objetos easter egg encima del mueble.
+La habitación entera vive en el grupo tv (comparte el yaw del mueble, así
+las juntas corren en diagonal con el escorzo): piso al ras de las patas,
+pared de fondo con glow anclado a la tele (mode 3, centrado vía `uSpot`),
+pared lateral derecha cerrando la esquina en x=3.4 local, zócalos y una
+alfombra frente al mueble que atrapa el charco del spot.
 
 ## Reglas de performance
 
