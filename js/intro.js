@@ -68,7 +68,7 @@ void main(){
   const FRAG = `
 precision highp float;
 varying vec3 vNrm, vPos, vLocal;
-uniform vec3 uColor, uEmissive, uEye, uSpot;
+uniform vec3 uColor, uEmissive, uEye, uSpot, uWall;
 uniform float uMode, uLine, uStatic, uTime, uCrtI, uFade;
 uniform sampler2D uTexL;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
@@ -81,7 +81,7 @@ void main(){
     // glow anclado a la tele (uSpot - offset), independiente del quad de pared
     vec2 q = vec2(vPos.x - uSpot.x, (vPos.y - (uSpot.y - 1.9)) * 1.3);
     float r = length(q) * 0.28;
-    vec3 bg = mix(vec3(0.06, 0.052, 0.045), vec3(0.024), smoothstep(0.15, 1.05, r));
+    vec3 bg = mix(uWall, uWall * 0.38, smoothstep(0.15, 1.05, r));
     // shaft: haz vertical tenue cayendo desde arriba sobre la tele
     float dx = vPos.x - uSpot.x;
     float shaft = exp(-dx * dx * 0.8) * smoothstep(-3.0, 2.2, vPos.y) * 0.085;
@@ -426,7 +426,7 @@ void main(){
       gl.useProgram(prog);
 
       this._u = {};
-      ['uProj', 'uView', 'uModel', 'uColor', 'uEmissive', 'uEye', 'uSpot', 'uMode', 'uLine', 'uStatic', 'uTime', 'uTexL', 'uCrtI', 'uFade'].forEach(n => {
+      ['uProj', 'uView', 'uModel', 'uColor', 'uEmissive', 'uEye', 'uSpot', 'uWall', 'uMode', 'uLine', 'uStatic', 'uTime', 'uTexL', 'uCrtI', 'uFade'].forEach(n => {
         this._u[n] = gl.getUniformLocation(prog, n);
       });
       this._aPos = gl.getAttribLocation(prog, 'aPos');
@@ -638,10 +638,13 @@ void main(){
         color: [0.062, 0.053, 0.045],
         local: M4.mul(M4.mul(T([0, -1.398, 0]), M4.rotX(-Math.PI / 2)), M4.scl([28, 28, 1]))
       }));
-      tv.push(this._mesh(quad(), { // pared lateral (normal hacia el cuarto)
-        color: [0.052, 0.047, 0.042],
+      // color de pared: uniform uWall (fondo) + mesh lateral al 85%
+      this._wall = [0.048, 0.066, 0.048];
+      this._sideWall = this._mesh(quad(), { // pared lateral (normal hacia el cuarto)
+        color: [this._wall[0] * 0.85, this._wall[1] * 0.85, this._wall[2] * 0.85],
         local: M4.mul(M4.mul(T([3.4, 0.9, 4.1]), M4.rotY(-Math.PI / 2)), M4.scl([12, 13, 1]))
-      }));
+      });
+      tv.push(this._sideWall);
       const SKIRT = [0.125, 0.115, 0.105];
       tv.push(this._mesh(box(26.6, 0.09, 0.03), { color: SKIRT, local: T([-9.9, -1.353, -1.885]) }));
       tv.push(this._mesh(box(0.03, 0.09, 12), { color: SKIRT, local: T([3.385, -1.353, 4.1]) }));
@@ -857,6 +860,7 @@ void main(){
       // spot cenital anclado a la tele (arriba y apenas adelante)
       const tvp = this._portrait ? TV_POS_P : TV_POS;
       gl.uniform3fv(this._u.uSpot, [tvp[0], tvp[1] + 2.2, tvp[2] + 1.5]);
+      gl.uniform3fv(this._u.uWall, this._wall);
       gl.uniform1f(this._u.uLine, this._uLine);
       // interferencia IR: shiver de static en la pantalla apagada al apretar
       // botones del control (decae en ~200ms, con un flicker leve encima)
