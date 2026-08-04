@@ -106,6 +106,57 @@ void main(){
     try { x.letterSpacing = (lsp || 0) + 'px'; } catch (e) { }
   };
 
+  // UI sfx — cues sintetizados estilo intro.js/makeAudio: cortos (<150ms),
+  // volumen bajo, cero assets. El AudioContext se crea lazy en el primer
+  // gesto con user activation; si quedó suspended (p. ej. wheel), el cue
+  // se saltea en silencio hasta el próximo click/tecla.
+  const makeSfx = () => {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try {
+      const ctx = new AC();
+      const master = ctx.createGain();
+      master.gain.value = 0.15;
+      master.connect(ctx.destination);
+      const noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const nd = noiseBuf.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+      const noise = (dur, type, freq, gain) => {
+        const t = ctx.currentTime;
+        const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+        const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+        const g = ctx.createGain(); g.gain.value = 0;
+        src.connect(f); f.connect(g); g.connect(master);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(gain, t + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        src.start(t); src.stop(t + dur + 0.05);
+      };
+      const tone = (f0, f1, dur, gain, type) => {
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(f0, t);
+        if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+        g.gain.setValueAtTime(gain, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        o.connect(g); g.connect(master);
+        o.start(t); o.stop(t + dur + 0.02);
+      };
+      return {
+        resume() {
+          if (ctx.state === 'suspended') ctx.resume().catch(() => { });
+          return ctx.state === 'running';
+        },
+        tick() { tone(1800, 1400, 0.03, 0.10, 'square'); },
+        tune() { tone(220, 880, 0.09, 0.06, 'square'); noise(0.12, 'highpass', 3500, 0.10); },
+        pop() { tone(500, 900, 0.06, 0.09, 'triangle'); },
+        popDown() { tone(900, 500, 0.06, 0.09, 'triangle'); },
+        confirm() { tone(700, 700, 0.05, 0.07, 'square'); setTimeout(() => tone(1050, 1050, 0.06, 0.07, 'square'), 70); }
+      };
+    } catch (e) { return null; }
+  };
+
   class Piso9Hero extends HTMLElement {
     static get observedAttributes() { return ['accent', 'strength', 'grain', 'crt']; }
 
@@ -171,6 +222,8 @@ void main(){
         visit: mkOverlay('a', 'visit project site'),
         site: mkOverlay('a', 'visit project site'),
         mailto: mkOverlay('a', 'email hello@piso9.studio', 'mailto:hello@piso9.studio'),
+        soundOn: mkOverlay('button', 'sound on'),
+        soundOff: mkOverlay('button', 'sound off'),
         panel: mkOverlay('div', '') // absorbs clicks inside the open OSD panel
       };
       this._overlays.panel.style.cursor = 'default';
@@ -181,6 +234,14 @@ void main(){
         el.addEventListener('click', (e) => {
           e.preventDefault();
           this.switchChannel(this._channels.findIndex(c => c.type === 'project' && c.pi === i));
+        });
+      }
+      // tick sutil al presionar cualquier control clickeable (solo mouse/pen:
+      // en touch el pointerdown también inicia swipes y sería ruido)
+      for (const key in this._overlays) {
+        if (key === 'panel' || key === 'menu') continue;
+        this._overlays[key].addEventListener('pointerdown', (e) => {
+          if (e.pointerType !== 'touch') this._sfx('tick');
         });
       }
       this._overlays.visit.target = '_blank';
@@ -222,10 +283,13 @@ void main(){
       this._overlays.menu.addEventListener('click', (e) => {
         e.preventDefault();
         this._menuOpen = !this._menuOpen;
+        this._sfx(this._menuOpen ? 'pop' : 'popDown');
         this._drawChannel();
       });
       this._overlays.langEn.addEventListener('click', (e) => { e.preventDefault(); this._setLang('en'); });
       this._overlays.langEs.addEventListener('click', (e) => { e.preventDefault(); this._setLang('es'); });
+      this._overlays.soundOn.addEventListener('click', (e) => { e.preventDefault(); this._setSound(true); });
+      this._overlays.soundOff.addEventListener('click', (e) => { e.preventDefault(); this._setSound(false); });
 
       // screen-reader announcement of the active channel
       this._live = document.createElement('div');
@@ -314,7 +378,7 @@ void main(){
         if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
         if (e.key === 'ArrowUp') { e.preventDefault(); this.switchChannel(this._chIndex + 1); }
         else if (e.key === 'ArrowDown') { e.preventDefault(); this.switchChannel(this._chIndex - 1); }
-        else if (e.key === 'Escape' && this._menuOpen) { this._menuOpen = false; this._drawChannel(); }
+        else if (e.key === 'Escape' && this._menuOpen) { this._menuOpen = false; this._sfx('popDown'); this._drawChannel(); }
       };
       window.addEventListener('keydown', this._onKey);
 
@@ -322,8 +386,10 @@ void main(){
       this._onDocDown = (e) => {
         if (!this._menuOpen) return;
         const o = this._overlays;
-        if (e.target === o.menu || e.target === o.langEn || e.target === o.langEs || e.target === o.panel) return;
+        if (e.target === o.menu || e.target === o.langEn || e.target === o.langEs ||
+          e.target === o.soundOn || e.target === o.soundOff || e.target === o.panel) return;
         this._menuOpen = false;
+        this._sfx('popDown');
         this._drawChannel();
       };
       document.addEventListener('pointerdown', this._onDocDown);
@@ -436,7 +502,28 @@ void main(){
       try { localStorage.setItem('p9-lang', l); } catch (e) { }
       document.documentElement.lang = l;
       if (window.posthog) posthog.capture('language_switched', { from: prev, to: l });
+      this._sfx('confirm');
       this._buildChannels();
+      this._drawChannel();
+    }
+
+    _sfx(cue) {
+      let on = 'on';
+      try { on = localStorage.getItem('p9-sound') || 'on'; } catch (e) { }
+      if (on === 'off') return;
+      if (this._sfxKit === undefined) this._sfxKit = makeSfx();
+      const k = this._sfxKit;
+      if (k && k.resume()) k[cue]();
+    }
+
+    _soundOn() {
+      try { return localStorage.getItem('p9-sound') !== 'off'; } catch (e) { return true; }
+    }
+
+    _setSound(on) {
+      try { localStorage.setItem('p9-sound', on ? 'on' : 'off'); } catch (e) { }
+      if (on) this._sfx('confirm'); // feedback audible solo al prender
+      if (window.posthog) posthog.capture('sound_toggled', { on });
       this._drawChannel();
     }
 
@@ -469,6 +556,7 @@ void main(){
       });
       this._lastNav = performance.now();
       this._menuOpen = false;
+      this._sfx('tune');
       if (this._reduced) {
         this._chIndex = idx;
         this._drawChannel();
@@ -919,7 +1007,7 @@ void main(){
       // OSD settings panel, above the controls
       if (this._menuOpen) {
         const pad = 36 * dpr;
-        const pw = 210 * dpr, ph = 72 * dpr;
+        const pw = 210 * dpr, ph = 100 * dpr;
         const pxl = w - pad - pw;
         const pb = rects.next[1] - (ch.type === 'home' ? 34 : 14) * dpr;
         const pt = pb - ph;
@@ -947,6 +1035,23 @@ void main(){
         x.fillText('ES', esX, oy);
         rects.langEn = [enX - 4 * dpr, oy - 6 * dpr, enW + 8 * dpr, 26 * dpr];
         rects.langEs = [esX - 4 * dpr, oy - 6 * dpr, esW + 8 * dpr, 26 * dpr];
+        setF(x, '500 ' + (12 * dpr) + 'px ' + STACK, 0.06 * 12 * dpr);
+        x.fillStyle = '#a3a3a3';
+        x.fillText(ui.sound || 'SOUND', pxl + 14 * dpr, pt + 68 * dpr);
+        setF(x, '400 ' + (15 * dpr) + 'px ' + MONO, 0.08 * 15 * dpr);
+        const onTxt = ui.soundOn || 'ON', offTxt = ui.soundOff || 'OFF';
+        const offW = x.measureText(offTxt).width;
+        const onW = x.measureText(onTxt).width;
+        const offX = pxl + pw - 14 * dpr - offW;
+        const onX = offX - 26 * dpr - onW; // gap ancho: hitboxes sin solaparse
+        const oy2 = pt + 66 * dpr;
+        const snd = this._soundOn();
+        x.fillStyle = snd ? this.accent : '#808080';
+        x.fillText(onTxt, onX, oy2);
+        x.fillStyle = snd ? '#808080' : this.accent;
+        x.fillText(offTxt, offX, oy2);
+        rects.soundOn = [onX - 4 * dpr, oy2 - 6 * dpr, onW + 8 * dpr, 26 * dpr];
+        rects.soundOff = [offX - 4 * dpr, oy2 - 6 * dpr, offW + 8 * dpr, 26 * dpr];
         rects.panel = [pxl, pt, pw, ph];
         x.textBaseline = 'alphabetic';
       }
