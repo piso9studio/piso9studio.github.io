@@ -609,7 +609,15 @@ void main(){
       gl.uniformMatrix4fv(this._u.uView, false, M4.lookAt(this._cam.eye, this._cam.tgt, [0, 1, 0]));
       gl.uniform3fv(this._u.uEye, this._cam.eye);
       gl.uniform1f(this._u.uLine, this._uLine);
-      gl.uniform1f(this._u.uStatic, this._uStatic);
+      // interferencia IR: shiver de static en la pantalla apagada al apretar
+      // botones del control (decae en ~200ms, con un flicker leve encima)
+      let shiver = 0;
+      if (this._shiverT0) {
+        const ts = (now - this._shiverT0) / 1000;
+        if (ts < 0.25) shiver = 0.25 * (1 - ts / 0.25) * (0.55 + 0.45 * Math.sin(ts * 110));
+        else this._shiverT0 = 0;
+      }
+      gl.uniform1f(this._u.uStatic, Math.max(this._uStatic, shiver));
       gl.uniform1f(this._u.uTime, t);
       gl.uniform1f(this._u.uCrtI, this.clientWidth < 720 ? 0 : 1);
       const rg = this._remoteGroup(t);
@@ -682,6 +690,7 @@ void main(){
       for (const z of this._dpadZones) consider(z.pos, { dpad: z });
       if (!best) return;
       const audio = this._ensureAudio();
+      this._shiverT0 = performance.now(); // el pulso IR "llega" a la tele
       if (best.payload.key) {
         const k = best.payload.key._key;
         k.t0 = performance.now();
@@ -693,6 +702,7 @@ void main(){
         const z = best.payload.dpad;
         this._vel.yaw += z.dir[0] * 1.6;
         this._vel.pitch += z.dir[1] * 1.2;
+        this._irT0 = performance.now();
         if (audio) audio.tap();
       }
     }

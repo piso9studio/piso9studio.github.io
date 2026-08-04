@@ -63,8 +63,10 @@ carga normal. Sonido sintetizado con Web Audio, cero assets.
 Easter egg: el keypad 3×3 del control (dígitos 1-9) beepea DTMF, se hunde y
 titila el LED IR; el último dígito pre-sintoniza el canal al prender
 (`p9:power-on` es CustomEvent con `detail.ch`; `_bail()` sigue despachando
-`Event` pelado). El d-pad sacude el control. Hit-testing por proyección de
-centros (misma matemática que `_powerScreen`), solo en taps <6px de drag.
+`Event` pelado). El d-pad sacude el control. Cada botón dispara además un
+shiver de static (~250ms, sutil) en la pantalla apagada — interferencia IR
+llegando a la tele. Hit-testing por proyección de centros (misma matemática
+que `_powerScreen`), solo en taps <6px de drag.
 
 ## Reglas de performance
 
