@@ -582,7 +582,6 @@ void main(){
     _setSound(on) {
       try { localStorage.setItem('p9-sound', on ? 'on' : 'off'); } catch (e) { }
       if (on) this._sfx('confirm'); // feedback audible solo al prender
-      if (window.posthog) posthog.capture('sound_toggled', { on });
       this._drawChannel();
     }
 

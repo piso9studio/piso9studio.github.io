@@ -1011,7 +1011,6 @@ void main(){
       if (on) { insp.rx = 0; insp.ry = 0; }
       const audio = this._ensureAudio();
       if (audio) { if (on) audio.pluck(); else audio.tap(); }
-      if (on && window.posthog) posthog.capture('intro_plant_inspected');
     }
 
     _press() {

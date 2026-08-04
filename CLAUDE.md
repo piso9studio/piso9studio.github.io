@@ -78,8 +78,9 @@ escena se funde a oscuro (mesh mode 4 + uniform `uFade`) y la planta viene al
 frente, rotable en todos los ejes con drag; tap suelto o Escape la devuelve.
 **Solo desktop**: en mobile (`(pointer: coarse)` o <720px) el tap en la planta
 no hace nada — ahí quedan activas solo las features del control remoto.
-Evento PostHog `intro_plant_inspected`. El patrón (objeto en `_shelfY` +
-`_plantToggle`-style) es la plantilla para futuros objetos inspeccionables.
+El patrón (objeto en `_shelfY` + `_plantToggle`-style) es la plantilla para
+futuros objetos inspeccionables. PostHog: solo los eventos originales del
+sitio — no agregar tracking a easter eggs sin pedido explícito de Maxi.
 
 La habitación entera vive en el grupo tv (comparte el yaw del mueble, así
 las juntas corren en diagonal con el escorzo): piso al ras de las patas,
