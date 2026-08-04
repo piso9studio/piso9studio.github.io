@@ -68,7 +68,7 @@ void main(){
   const FRAG = `
 precision highp float;
 varying vec3 vNrm, vPos, vLocal;
-uniform vec3 uColor, uEmissive, uEye;
+uniform vec3 uColor, uEmissive, uEye, uSpot;
 uniform float uMode, uLine, uStatic, uTime, uCrtI;
 uniform sampler2D uTexL;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
@@ -76,7 +76,11 @@ void main(){
   if (uMode > 2.5) {
     vec2 q = vLocal.xy;
     float r = length(q * vec2(1.3, 1.0)) * 2.0;
-    vec3 bg = mix(vec3(0.075, 0.065, 0.055), vec3(0.028), smoothstep(0.15, 1.05, r));
+    vec3 bg = mix(vec3(0.06, 0.052, 0.045), vec3(0.024), smoothstep(0.15, 1.05, r));
+    // shaft: haz vertical tenue cayendo desde arriba sobre la tele
+    float dx = vPos.x - uSpot.x;
+    float shaft = exp(-dx * dx * 0.8) * smoothstep(-3.0, 2.2, vPos.y) * 0.085;
+    bg += vec3(1.0, 0.96, 0.86) * shaft;
     gl_FragColor = vec4(bg, 1.0);
     return;
   }
@@ -114,9 +118,18 @@ void main(){
   vec3 H = normalize(L1 + V);
   float spec = pow(max(dot(N, H), 0.0), 40.0);
   float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-  vec3 col = uColor * (0.16
-      + 0.85 * d1 * vec3(1.0, 0.93, 0.82)     // key cálida
-      + 0.30 * d2 * vec3(0.55, 0.65, 0.85))   // fill fría
+  // spot cenital sobre la tele (protagonista): cono con falloff por distancia,
+  // apenas adelantado para iluminar también el frente del gabinete
+  vec3 sv = vPos - uSpot;
+  float sdist = length(sv);
+  vec3 SL = sv / sdist;
+  float cone = smoothstep(0.70, 0.90, -SL.y);
+  float att = 1.0 / (1.0 + 0.15 * sdist * sdist);
+  float dspot = max(dot(N, -SL), 0.0);
+  vec3 col = uColor * (0.12
+      + 0.60 * d1 * vec3(1.0, 0.93, 0.82)     // key cálida (cedida al spot)
+      + 0.26 * d2 * vec3(0.55, 0.65, 0.85)    // fill fría
+      + 1.55 * dspot * cone * att * vec3(1.0, 0.96, 0.88))
     + vec3(1.0, 0.95, 0.85) * spec * 0.18
     + vec3(0.6, 0.65, 0.75) * rim * 0.22
     + uEmissive;
@@ -306,7 +319,7 @@ void main(){
       gl.useProgram(prog);
 
       this._u = {};
-      ['uProj', 'uView', 'uModel', 'uColor', 'uEmissive', 'uEye', 'uMode', 'uLine', 'uStatic', 'uTime', 'uTexL', 'uCrtI'].forEach(n => {
+      ['uProj', 'uView', 'uModel', 'uColor', 'uEmissive', 'uEye', 'uSpot', 'uMode', 'uLine', 'uStatic', 'uTime', 'uTexL', 'uCrtI'].forEach(n => {
         this._u[n] = gl.getUniformLocation(prog, n);
       });
       this._aPos = gl.getAttribLocation(prog, 'aPos');
@@ -608,6 +621,9 @@ void main(){
       gl.uniformMatrix4fv(this._u.uProj, false, M4.persp(FOV, w / h, 0.05, 20));
       gl.uniformMatrix4fv(this._u.uView, false, M4.lookAt(this._cam.eye, this._cam.tgt, [0, 1, 0]));
       gl.uniform3fv(this._u.uEye, this._cam.eye);
+      // spot cenital anclado a la tele (arriba y apenas adelante)
+      const tvp = this._portrait ? TV_POS_P : TV_POS;
+      gl.uniform3fv(this._u.uSpot, [tvp[0], tvp[1] + 2.2, tvp[2] + 1.5]);
       gl.uniform1f(this._u.uLine, this._uLine);
       // interferencia IR: shiver de static en la pantalla apagada al apretar
       // botones del control (decae en ~200ms, con un flicker leve encima)
