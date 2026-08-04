@@ -524,9 +524,9 @@ void main(){
       const SKIRT = [0.125, 0.115, 0.105];
       tv.push(this._mesh(box(26.6, 0.09, 0.03), { color: SKIRT, local: T([-9.9, -1.353, -1.885]) }));
       tv.push(this._mesh(box(0.03, 0.09, 12), { color: SKIRT, local: T([3.385, -1.353, 4.1]) }));
-      tv.push(this._mesh(box(2.7, 0.012, 1.7), { // alfombra frente al mueble
+      tv.push(this._mesh(box(4.1, 0.012, 3.0), { // alfombra: mueble encima + frente
         color: [0.155, 0.11, 0.07],
-        local: T([0.3, -1.392, 1.15])
+        local: T([0.15, -1.392, 0.55])
       }));
       tv.push(this._mesh(cylinder(0.008, 0.7, 6), {
         color: [0.2, 0.2, 0.2], local: M4.mul(T([-0.18, 0.85, -0.1]), M4.rotZ(0.45))
