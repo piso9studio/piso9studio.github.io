@@ -491,7 +491,17 @@ void main(){
       // así que el empalme no se ve.
       this._standby = document.documentElement.classList.contains('p9-intro');
       if (this._standby) {
-        this._onPowerOn = () => {
+        this._onPowerOn = (e) => {
+          // easter egg: un dígito del keypad de la intro pre-sintoniza el canal
+          const ch = e && e.detail ? e.detail.ch : null;
+          if (ch != null) {
+            const i = this._channels.findIndex(c => c.id === ch);
+            if (i >= 0 && i !== this._chIndex) {
+              this._chIndex = i;
+              this._drawChannel();
+              this._afterSwap();
+            }
+          }
           this._standby = false;
           this._t0 = performance.now();
           this._tPrev = this._t0;

@@ -205,6 +205,27 @@ void main(){
       };
       const a = {
         click() { burst(0.05, 'highpass', 2200, 0.35); },
+        beep(row, col) { // DTMF real: filas 697/770/852 Hz, columnas 1209/1336/1477 Hz
+          const t = ctx.currentTime;
+          [[697, 770, 852][row], [1209, 1336, 1477][col]].forEach(fr => {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'sine'; o.frequency.value = fr;
+            g.gain.setValueAtTime(0.12, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+            o.connect(g); g.connect(master);
+            o.start(t); o.stop(t + 0.1);
+          });
+        },
+        tap() { // thunk suave para el d-pad
+          const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime;
+          o.type = 'sine';
+          o.frequency.setValueAtTime(180, t);
+          o.frequency.exponentialRampToValueAtTime(70, t + 0.08);
+          g.gain.setValueAtTime(0.3, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+          o.connect(g); g.connect(master);
+          o.start(t); o.stop(t + 0.12);
+        },
         thunk() {
           const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime;
           o.type = 'sine';
@@ -326,8 +347,8 @@ void main(){
       this._vel = { yaw: 0, pitch: 0 };
       this._px = -1; this._py = -1;
       this.addEventListener('pointerdown', (e) => {
-        this.setPointerCapture(e.pointerId);
-        this._drag = { x: e.clientX, y: e.clientY, t: performance.now() };
+        try { this.setPointerCapture(e.pointerId); } catch (err) { }
+        this._drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: 0, t: performance.now() };
         this._vel.yaw = 0; this._vel.pitch = 0;
       });
       this.addEventListener('pointermove', (e) => {
@@ -340,11 +361,16 @@ void main(){
         this._rot.yaw = clamp(this._rot.yaw + dx, -2.5, 2.5);
         this._rot.pitch = clamp(this._rot.pitch + dy, -1.4, 1.4);
         this._vel.yaw = dx / dt; this._vel.pitch = dy / dt;
-        this._drag = { x: e.clientX, y: e.clientY, t: now };
+        this._drag.x = e.clientX; this._drag.y = e.clientY; this._drag.t = now;
+        this._drag.moved = Math.max(this._drag.moved, Math.hypot(e.clientX - this._drag.x0, e.clientY - this._drag.y0));
       });
-      const endDrag = () => { this._drag = null; };
-      this.addEventListener('pointerup', endDrag);
-      this.addEventListener('pointercancel', endDrag);
+      this.addEventListener('pointerup', (e) => {
+        const d = this._drag;
+        this._drag = null;
+        // tap seco (no drag, no power en curso): probar keypad/d-pad
+        if (d && d.moved < 6 && !this._power) this._remoteTap(e.clientX, e.clientY);
+      });
+      this.addEventListener('pointercancel', () => { this._drag = null; });
 
       this._onIntroKey = (e) => {
         if ((e.key === 'Enter' || e.key === ' ') && document.activeElement !== this._btn) {
@@ -413,12 +439,24 @@ void main(){
       r.push(this._irLed);
       r.push(this._mesh(box(0.09, 0.03, 0.018), { color: RUBBER, local: T([0, 0.04, 0.026]) }));
       r.push(this._mesh(box(0.03, 0.09, 0.018), { color: RUBBER, local: T([0, 0.04, 0.026]) }));
+      this._keyBtns = [];
       for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
-        r.push(this._mesh(cylinder(0.014, 0.012, 12), {
+        const pos = [-0.045 + col * 0.045, -0.055 - row * 0.045, 0.026];
+        const m = this._mesh(cylinder(0.014, 0.012, 12), {
           color: RUBBER,
-          local: M4.mul(T([-0.045 + col * 0.045, -0.055 - row * 0.045, 0.026]), M4.rotX(Math.PI / 2))
-        }));
+          local: M4.mul(T(pos), M4.rotX(Math.PI / 2))
+        });
+        m._key = { digit: row * 3 + col + 1, row, col, pos, t0: 0 };
+        this._keyBtns.push(m);
+        r.push(m);
       }
+      // d-pad: 4 zonas lógicas sobre la cruz (centro [0, 0.04]); dir empuja el wiggle
+      this._dpadZones = [
+        { dir: [0, -1], pos: [0, 0.072, 0.026] },
+        { dir: [0, 1], pos: [0, 0.008, 0.026] },
+        { dir: [-1, 0], pos: [-0.032, 0.04, 0.026] },
+        { dir: [1, 0], pos: [0.032, 0.04, 0.026] }
+      ];
       r.push(this._mesh(quad(), {
         mode: 2, blend: true,
         local: M4.mul(T([0, -0.185, 0.0235]), M4.scl([0.1, 0.025, 1]))
@@ -506,6 +544,20 @@ void main(){
         this._vel.yaw *= damp; this._vel.pitch *= damp;
         this._rot.yaw = clamp(this._rot.yaw + this._vel.yaw * dt, -2.5, 2.5);
         this._rot.pitch = clamp(this._rot.pitch + this._vel.pitch * dt, -1.4, 1.4);
+      }
+      for (let i = 0; i < this._keyBtns.length; i++) {
+        const k = this._keyBtns[i]._key;
+        if (!k.t0) continue;
+        const tk = (now - k.t0) / 1000;
+        const dep = tk < 0.06 ? tk / 0.06 : Math.max(0, 1 - (tk - 0.06) / 0.1);
+        if (tk > 0.16) k.t0 = 0;
+        this._keyBtns[i].local = M4.mul(
+          M4.t([k.pos[0], k.pos[1], k.pos[2] - 0.008 * dep]), M4.rotX(Math.PI / 2));
+      }
+      if (this._irT0) { // blink del LED IR al apretar una tecla (el power lo pisa)
+        const ti = (now - this._irT0) / 1000;
+        this._irLed.emissive = ti < 0.12 ? [0.5, 0.06, 0.03] : [0, 0, 0];
+        if (ti >= 0.12) this._irT0 = 0;
       }
       if (this._power) {
         const tp = (now - this._power.t0) / 1000;
@@ -600,6 +652,51 @@ void main(){
       return { x, y, r: Math.max(r, 10) };
     }
 
+    // punto local del control → px CSS de pantalla; null si quedó detrás de cámara
+    _remotePointScreen(local, g, vp) {
+      const w = this.clientWidth, h = this.clientHeight;
+      const wc = M4.xform(g, local);
+      const c = M4.xform(vp, [wc[0], wc[1], wc[2], 1]);
+      if (c[3] <= 0) return null;
+      return { x: (c[0] / c[3] * 0.5 + 0.5) * w, y: (1 - (c[1] / c[3] * 0.5 + 0.5)) * h };
+    }
+
+    // easter egg: tap sobre el keypad (beep DTMF + dígito que pre-sintoniza el
+    // canal al prender) o el d-pad (wiggle). Hit-testing por proyección de los
+    // centros, mismo camino que _powerScreen; el más cercano dentro del radio.
+    _remoteTap(px, py) {
+      const w = this.clientWidth, h = this.clientHeight;
+      if (!w || !h) return;
+      const vp = M4.mul(M4.persp(FOV, w / h, 0.05, 20), M4.lookAt(this._cam.eye, this._cam.tgt, [0, 1, 0]));
+      const g = this._remoteGroup((performance.now() - this._t0) / 1000);
+      let best = null;
+      const consider = (pos, payload) => {
+        const s = this._remotePointScreen(pos, g, vp);
+        if (!s) return;
+        const edge = this._remotePointScreen([pos[0] + 0.02, pos[1], pos[2]], g, vp);
+        const rr = Math.max(edge ? Math.hypot(edge.x - s.x, edge.y - s.y) : 0, 18); // piso táctil 18px
+        const dd = Math.hypot(px - s.x, py - s.y);
+        if (dd < rr && (!best || dd < best.d)) best = { d: dd, payload };
+      };
+      for (const m of this._keyBtns) consider(m._key.pos, { key: m });
+      for (const z of this._dpadZones) consider(z.pos, { dpad: z });
+      if (!best) return;
+      const audio = this._ensureAudio();
+      if (best.payload.key) {
+        const k = best.payload.key._key;
+        k.t0 = performance.now();
+        this._pendingCh = k.digit;
+        this._keyPresses = (this._keyPresses || 0) + 1;
+        this._irT0 = performance.now();
+        if (audio) audio.beep(k.row, k.col);
+      } else {
+        const z = best.payload.dpad;
+        this._vel.yaw += z.dir[0] * 1.6;
+        this._vel.pitch += z.dir[1] * 1.2;
+        if (audio) audio.tap();
+      }
+    }
+
     // audio lazy, gateado por el mute global del hero (localStorage 'p9-sound')
     _ensureAudio() {
       if (this._audio === undefined) {
@@ -617,13 +714,17 @@ void main(){
       if (audio) audio.click();
       if (window.posthog) posthog.capture('intro_power_on', {
         lang: this._lang,
-        ms_to_press: Math.round(performance.now() - this._shownAt)
+        ms_to_press: Math.round(performance.now() - this._shownAt),
+        ch: this._pendingCh != null ? this._pendingCh : null,
+        keypad_presses: this._keyPresses || 0
       });
       this._btn.disabled = true;
     }
 
     _handoff() {
-      window.dispatchEvent(new Event('p9:power-on'));
+      window.dispatchEvent(new CustomEvent('p9:power-on', {
+        detail: { ch: this._pendingCh != null ? this._pendingCh : null }
+      }));
       if (this._audio) this._audio.hissOff(0.5);
       this.classList.add('fade');
       setTimeout(() => {
