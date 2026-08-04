@@ -600,11 +600,21 @@ void main(){
       return { x, y, r: Math.max(r, 10) };
     }
 
+    // audio lazy, gateado por el mute global del hero (localStorage 'p9-sound')
+    _ensureAudio() {
+      if (this._audio === undefined) {
+        let on = true;
+        try { on = localStorage.getItem('p9-sound') !== 'off'; } catch (e) { }
+        this._audio = on ? makeAudio() : null;
+      }
+      return this._audio;
+    }
+
     _press() {
       if (this._power) return;
       this._power = { t0: performance.now(), thunked: false, hissed: false, done: false };
-      this._audio = makeAudio();
-      if (this._audio) this._audio.click();
+      const audio = this._ensureAudio();
+      if (audio) audio.click();
       if (window.posthog) posthog.capture('intro_power_on', {
         lang: this._lang,
         ms_to_press: Math.round(performance.now() - this._shownAt)
