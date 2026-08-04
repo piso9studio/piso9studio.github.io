@@ -29,6 +29,7 @@ uniform vec3 uAccent;
 uniform float uCrt;
 uniform float uBoot;
 uniform float uSwitch;
+uniform float uDragY;
 
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 
@@ -38,6 +39,11 @@ void main(){
   vec2 cc = uv - 0.5;
   uv = 0.5 + cc * (1.0 + uCrt * 0.10 * dot(cc, cc) * 2.2);
   float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+  // vertical roll (drag táctil): la imagen se desplaza, el tubo queda fijo;
+  // la banda fuera de rango se rellena de static más abajo
+  float sy = uv.y + uDragY;
+  float inBand = step(0.0, sy) * step(sy, 1.0);
+  vec2 suv = vec2(uv.x, sy);
   float aspect = uRes.x/uRes.y;
   vec2 disp = vec2(0.0);
   float energy = 0.0;
@@ -58,13 +64,13 @@ void main(){
   disp *= uStrength;
   vec2 ca = disp * 0.35 + vec2(0.0012, 0.0) * uStrength * (0.4 + energy);
   vec3 col;
-  col.r = texture2D(uTex, uv - disp - ca).r;
-  col.g = texture2D(uTex, uv - disp).g;
-  col.b = texture2D(uTex, uv - disp + ca).b;
+  col.r = texture2D(uTex, suv - disp - ca).r;
+  col.g = texture2D(uTex, suv - disp).g;
+  col.b = texture2D(uTex, suv - disp + ca).b;
 
   // UI layer: takes the tube shape but not the mouse distortion.
   // Alpha-composited (not additive) so opaque OSD panels can cover content.
-  vec4 uiC = texture2D(uTexUI, uv);
+  vec4 uiC = texture2D(uTexUI, suv);
   col = mix(col, uiC.rgb, uiC.a);
   vec2 m = uv - uMouse; m.x *= aspect;
   col += uAccent * exp(-dot(m,m)*7.0) * 0.045;
@@ -76,6 +82,7 @@ void main(){
   // static: boot plays it once at load, dissolving into the content;
   // channel-switch bursts reuse the same noise
   float stat = max(1.0 - smoothstep(1.2, 1.8, uBoot), uSwitch);
+  stat = max(stat, max(1.0 - inBand, min(abs(uDragY) * 0.8, 0.3)));
   float n1 = hash(floor(uv*uRes*0.5) + vec2(fract(uTime*11.3)*291.0, fract(uTime*7.7)*173.0));
   col = mix(col, vec3(n1*n1*0.85), stat);
 
@@ -328,7 +335,7 @@ void main(){
       gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
 
       this._u = {};
-      ['uTex', 'uTexUI', 'uRes', 'uTime', 'uStrength', 'uGrain', 'uMouse', 'uPts', 'uAges', 'uAccent', 'uCrt', 'uBoot', 'uSwitch'].forEach(n => {
+      ['uTex', 'uTexUI', 'uRes', 'uTime', 'uStrength', 'uGrain', 'uMouse', 'uPts', 'uAges', 'uAccent', 'uCrt', 'uBoot', 'uSwitch', 'uDragY'].forEach(n => {
         this._u[n] = gl.getUniformLocation(prog, n);
       });
 
@@ -406,16 +413,62 @@ void main(){
         }
       };
       this.addEventListener('wheel', this._onWheel, { passive: false });
-      this._onPDown = (e) => { if (e.pointerType === 'touch') this._tY = e.clientY; };
+      // touch: el canal sigue el dedo (vertical roll de tele vieja). Al soltar,
+      // conmuta si superó ~15% del alto o fue un flick rápido; si no, spring a 0.
+      // Cualquier drag >10px suprime el click de los overlays (fase captura).
+      this._rollY = 0;
+      this._rollAnim = null;
+      this._suppressClick = false;
+      this._onPDown = (e) => {
+        if (e.pointerType !== 'touch') return;
+        this._tDrag = { y0: e.clientY, y: e.clientY, t: performance.now(), v: 0, moved: false };
+        this._rollAnim = null;
+      };
+      this._onPMove = (e) => {
+        const d = this._tDrag;
+        if (!d || e.pointerType !== 'touch') return;
+        const now = performance.now();
+        d.v = 0.8 * d.v + 0.2 * ((e.clientY - d.y) / Math.max(now - d.t, 1)); // px/ms suavizado
+        d.y = e.clientY; d.t = now;
+        if (Math.abs(e.clientY - d.y0) > 10) d.moved = true;
+        const h = Math.max(this.clientHeight, 1);
+        let f = (e.clientY - d.y0) / h;
+        const lim = 0.4; // rubber-band pasando ±40%
+        if (Math.abs(f) > lim) f = Math.sign(f) * (lim + (Math.abs(f) - lim) * 0.35);
+        if (!this._reduced && this._switchT0 < 0) this._rollY = f;
+      };
       this._onPUp = (e) => {
-        if (e.pointerType === 'touch' && this._tY != null) {
-          const dy = e.clientY - this._tY;
-          if (Math.abs(dy) > 48) this.switchChannel(this._chIndex + (dy < 0 ? 1 : -1));
+        const d = this._tDrag;
+        this._tDrag = null;
+        if (!d || e.pointerType !== 'touch') return;
+        if (d.moved) {
+          this._suppressClick = true;
+          setTimeout(() => { this._suppressClick = false; }, 80);
         }
-        this._tY = null;
+        const h = Math.max(this.clientHeight, 1);
+        const f = (e.clientY - d.y0) / h;
+        // v solo cuenta como flick si el último move fue reciente: arrastrar
+        // rápido y sostener el dedo quieto no debe conmutar al soltar
+        const v = performance.now() - d.t < 100 ? d.v : 0;
+        if (Math.abs(f) > 0.15 || Math.abs(v) > 0.5) {
+          this.switchChannel(this._chIndex + (f < 0 ? 1 : -1)); // arriba = siguiente
+        }
+        this._rollAnim = { from: this._rollY, t0: performance.now() };
+      };
+      this._onPCancel = () => {
+        // cancel (p. ej. el browser se queda el gesto): sin commit, solo spring
+        if (!this._tDrag) return;
+        this._tDrag = null;
+        this._rollAnim = { from: this._rollY, t0: performance.now() };
+      };
+      this._onClickCap = (e) => {
+        if (this._suppressClick) { e.preventDefault(); e.stopPropagation(); }
       };
       this.addEventListener('pointerdown', this._onPDown);
+      this.addEventListener('pointermove', this._onPMove);
       this.addEventListener('pointerup', this._onPUp);
+      this.addEventListener('pointercancel', this._onPCancel);
+      this.addEventListener('click', this._onClickCap, true);
 
       this._ro = new ResizeObserver(() => this._resize());
       this._ro.observe(this);
@@ -446,6 +499,7 @@ void main(){
         window.addEventListener('p9:power-on', this._onPowerOn, { once: true });
       }
       this._reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      this._coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
       this._tPrev = this._t0;
       const loop = (now) => {
         this._raf = requestAnimationFrame(loop);
@@ -463,7 +517,10 @@ void main(){
       document.removeEventListener('pointerdown', this._onDocDown);
       this.removeEventListener('wheel', this._onWheel);
       this.removeEventListener('pointerdown', this._onPDown);
+      this.removeEventListener('pointermove', this._onPMove);
       this.removeEventListener('pointerup', this._onPUp);
+      this.removeEventListener('pointercancel', this._onPCancel);
+      this.removeEventListener('click', this._onClickCap, true);
       this._booted = false;
     }
 
@@ -695,7 +752,7 @@ void main(){
         x.textBaseline = 'alphabetic';
         setF(x, '500 ' + (10 * dpr) + 'px ' + STACK, 0.16 * 10 * dpr);
         x.fillStyle = '#808080';
-        const t = ui.hint || 'SCROLL / ARROW KEYS';
+        const t = (this._coarse && ui.hintTouch) || ui.hint || 'SCROLL / ARROW KEYS';
         x.fillText(t, w - pad - x.measureText(t).width, upY - 12 * dpr);
         x.textBaseline = prevBase;
       }
@@ -1130,6 +1187,12 @@ void main(){
         else if (this._swapped) this._switchT0 = -1;
       }
       gl.uniform1f(this._u.uSwitch, sw);
+      if (this._rollAnim) {
+        const ta = (now - this._rollAnim.t0) / 150;
+        this._rollY = ta >= 1 ? 0 : this._rollAnim.from * (1 - sstep(0, 1, ta));
+        if (ta >= 1) this._rollAnim = null;
+      }
+      gl.uniform1f(this._u.uDragY, this._rollY);
       gl.uniform2f(this._u.uRes, this._canvas.width, this._canvas.height);
       gl.uniform1f(this._u.uTime, (now - this._t0) / 1000);
       gl.uniform1f(this._u.uStrength, this.strengthVal);
