@@ -490,6 +490,24 @@ void main(){
       tv.push(this._standbyLed);
       tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([-0.55, -0.555, 0]) }));
       tv.push(this._mesh(box(0.2, 0.06, 0.5), { color: [0.06, 0.06, 0.06], local: T([0.55, -0.555, 0]) }));
+
+      // mueble mid-century de madera bajo la tele: tapa con voladizo, cuerpo
+      // con frente de listones verticales y patas cilíndricas finas.
+      // this._shelfY: superficie de la tapa (local al grupo tv) — anclaje para
+      // apoyar futuros objetos easter egg encima del mueble.
+      this._shelfY = -0.585;
+      const WOOD = [0.50, 0.27, 0.12], WOOD_DARK = [0.20, 0.10, 0.045], WOOD_LEG = [0.55, 0.32, 0.15];
+      tv.push(this._mesh(box(2.3, 0.04, 0.6), { color: WOOD, local: T([0, -0.605, 0]) }));
+      tv.push(this._mesh(box(2.2, 0.34, 0.55), { color: WOOD_DARK, local: T([0, -0.795, 0]) }));
+      for (let i = 0; i < 26; i++) {
+        tv.push(this._mesh(box(0.048, 0.30, 0.02), {
+          color: WOOD,
+          local: T([-1.01 + i * (2.02 / 25), -0.795, 0.283])
+        }));
+      }
+      [[-0.95, -0.18], [-0.95, 0.18], [0.95, -0.18], [0.95, 0.18]].forEach(([lx, lz]) => {
+        tv.push(this._mesh(cylinder(0.02, 0.22, 10), { color: WOOD_LEG, local: T([lx, -1.075, lz]) }));
+      });
       tv.push(this._mesh(cylinder(0.008, 0.7, 6), {
         color: [0.2, 0.2, 0.2], local: M4.mul(T([-0.18, 0.85, -0.1]), M4.rotZ(0.45))
       }));

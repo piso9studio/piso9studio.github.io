@@ -68,6 +68,11 @@ shiver de static (~250ms, sutil) en la pantalla apagada — interferencia IR
 llegando a la tele. Hit-testing por proyección de centros (misma matemática
 que `_powerScreen`), solo en taps <6px de drag.
 
+La tele está apoyada en un mueble de madera mid-century (tapa con voladizo,
+frente de listones, patas cilíndricas) construido en `_buildScene` dentro del
+grupo tv. `this._shelfY` (-0.585, local al grupo) es la superficie de la tapa:
+anclaje pensado para apoyar futuros objetos easter egg encima del mueble.
+
 ## Reglas de performance
 
 - **Cero requests a terceros en la carga inicial.** Todo self-hosted. Los sitios embebidos (forg1.com) cargan solo al click, vía el facade de `js/main.js`.
