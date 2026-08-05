@@ -232,6 +232,15 @@ void main(){
     return { pos: new Float32Array(P), idx: new Uint16Array(I) };
   }
 
+  function sphere(r, seg) {
+    const prof = [];
+    for (let i = 0; i <= 8; i++) {
+      const a = -Math.PI / 2 + i / 8 * Math.PI;
+      prof.push([Math.max(r * Math.cos(a), r * 0.02), r * Math.sin(a)]);
+    }
+    return lathe(prof, seg || 14);
+  }
+
   function leaf() {
     const ROWS = 13, COLS = 9, P = [], I = [];
     const wAt = (s) => 0.56 * Math.pow(Math.sin(Math.min(s * 1.05, 1) * Math.PI), 0.65) * (1 - 0.22 * s);
@@ -641,6 +650,32 @@ void main(){
       chPart(box(0.15, 0.03, 0.74), { color: WOOD }, T([-0.375, 0.615, 0]));
       chPart(box(0.15, 0.03, 0.74), { color: WOOD }, T([0.375, 0.615, 0]));
 
+      const CAT_W = [0.80, 0.78, 0.74], CAT_B = [0.10, 0.095, 0.09], CAT_C = [0.55, 0.30, 0.12];
+      this._catBase = M4.mul(CH, T([0.10, 0.92, -0.40]));
+      const cat = [];
+      const catPart = (geo, color, m) => {
+        const ms = this._mesh(geo, { color, local: m });
+        cat.push(ms);
+        return ms;
+      };
+      this._catBody = catPart(sphere(0.09, 16), CAT_W, M4.mul(T([0, 0.05, 0]), M4.scl([1.5, 0.85, 0.95])));
+      this._catBodyBase = this._catBody.local;
+      catPart(sphere(0.06, 12), CAT_B, M4.mul(T([0.03, 0.10, -0.01]), M4.scl([1.3, 0.75, 0.95])));
+      catPart(sphere(0.05, 12), CAT_C, M4.mul(T([0.12, 0.07, 0.02]), M4.scl([1.1, 0.8, 0.9])));
+      catPart(sphere(0.075, 14), CAT_W, M4.mul(T([-0.16, 0.10, 0.03]), M4.rotY(0.35)));
+      catPart(sphere(0.045, 10), CAT_B, M4.mul(T([-0.19, 0.145, 0.005]), M4.scl([1, 0.8, 1])));
+      catPart(sphere(0.04, 10), CAT_C, M4.mul(T([-0.13, 0.14, 0.055]), M4.scl([1, 0.75, 1])));
+      this._catEarL = catPart(cone(0.028, 0.002, 0.06, 6), CAT_B, T([-0.205, 0.185, 0.0]));
+      this._catEarLBase = this._catEarL.local;
+      this._catEarR = catPart(cone(0.028, 0.002, 0.06, 6), CAT_C, T([-0.115, 0.185, 0.05]));
+      this._catEarRBase = this._catEarR.local;
+      this._catTail = [];
+      for (let i = 0; i < 6; i++) {
+        this._catTail.push(catPart(cone(0.02 - i * 0.0022, 0.02 - (i + 1) * 0.0022, 0.075, 8),
+          i % 2 ? CAT_C : CAT_B, T([0, 0, 0])));
+      }
+      this._catMeshes = cat;
+
       this._plantPos = [-1.25, this._shelfY, 0.12];
       const pl = [];
       const AMBER = { color: [0.66, 0.20, 0.05], emissive: [0.10, 0.025, 0.004] };
@@ -832,6 +867,20 @@ void main(){
       const tg = this._tvGroup();
       this._draw(this._bgMesh, tg);
       for (let i = 0; i < this._tvMeshes.length; i++) this._draw(this._tvMeshes[i], tg);
+      const br = 1 + 0.02 * Math.sin(t * 1.9);
+      this._catBody.local = M4.mul(this._catBodyBase, M4.scl([1, br, 1]));
+      const twL = Math.pow(Math.max(Math.sin(t * 0.53), 0), 40);
+      const twR = Math.pow(Math.max(Math.sin(t * 0.41 + 2), 0), 40);
+      this._catEarL.local = M4.mul(this._catEarLBase, M4.rotZ(0.35 * twL));
+      this._catEarR.local = M4.mul(this._catEarRBase, M4.rotZ(-0.35 * twR));
+      let tm = M4.mul(M4.t([0.20, 0.03, 0.0]), M4.mul(M4.rotZ(-1.9), M4.rotX(0.3)));
+      for (let i = 0; i < this._catTail.length; i++) {
+        this._catTail[i].local = M4.mul(tm, M4.t([0, 0.0375, 0]));
+        tm = M4.mul(M4.mul(M4.mul(tm, M4.t([0, 0.075, 0])), M4.rotZ(-0.28)),
+          M4.rotX(0.22 * Math.sin(t * 1.5 + i * 0.7)));
+      }
+      const cg = M4.mul(tg, this._catBase);
+      for (let i = 0; i < this._catMeshes.length; i++) this._draw(this._catMeshes[i], cg);
       for (let i = 0; i < this._remoteMeshes.length; i++) this._draw(this._remoteMeshes[i], rg);
 
       const cE = this._cam.eye, cT = this._cam.tgt;

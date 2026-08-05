@@ -87,7 +87,11 @@ las juntas corren en diagonal con el escorzo): piso al ras de las patas,
 pared de fondo con glow anclado a la tele (mode 3, centrado vía `uSpot`),
 pared lateral derecha cerrando la esquina en x=3.4 local, zócalos, una
 alfombra frente al mueble que atrapa el charco del spot, y un sillón
-mid-century al frente-derecha mirando a la tele.
+mid-century al frente-derecha mirando a la tele. Sobre el respaldo del sillón
+duerme una gata calicó (blanco + parches negro/caramelo, colores de la gata
+real de Maxi) con animación idle en `_frame`: respiración (escala Y del
+cuerpo), cola de 6 segmentos que se hamaca y orejas que twitchean cada tanto
+(`_catBody`/`_catTail`/`_catEar*`). Decorativa, sin interacción.
 
 ## Reglas de performance
 
