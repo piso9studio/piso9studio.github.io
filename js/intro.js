@@ -623,10 +623,11 @@ void main(){
         local: M4.mul(M4.mul(T([0, -1.398, 0]), M4.rotX(-Math.PI / 2)), M4.scl([28, 28, 1]))
       }));
       this._wall = [0.048, 0.066, 0.048];
-      tv.push(this._mesh(quad(), {
-        mode: 3,
+      this._sideWall = this._mesh(quad(), {
+        color: [this._wall[0] * 0.85, this._wall[1] * 0.85, this._wall[2] * 0.85],
         local: M4.mul(M4.mul(T([3.4, 0.9, 4.1]), M4.rotY(-Math.PI / 2)), M4.scl([12, 13, 1]))
-      }));
+      });
+      tv.push(this._sideWall);
       const SKIRT = [0.125, 0.115, 0.105];
       tv.push(this._mesh(box(26.6, 0.09, 0.03), { color: SKIRT, local: T([-9.9, -1.353, -1.885]) }));
       tv.push(this._mesh(box(0.03, 0.09, 12), { color: SKIRT, local: T([3.385, -1.353, 4.1]) }));
